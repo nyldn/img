@@ -4,5 +4,12 @@
 !.env.example
 node_modules/
 img-output/
-open-image-output/
 generated/
+coverage/
+dist/
+tmp/
+*.log
+*.tgz
+.claude/settings.local.json
+.codex/
+.agents/
