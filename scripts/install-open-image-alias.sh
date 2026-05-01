@@ -12,9 +12,15 @@ argument-hint: "[natural language image request]"
 allowed-tools: "Bash(open-image:*)"
 ---
 
-# Open Image Alias
+# Open Image
 
-Generate an image from the user's natural language request:
+If the user runs `/open-image setup`, run the setup workflow:
+
+```bash
+open-image setup
+```
+
+Otherwise, generate an image from the user's natural language request:
 
 ```text
 $ARGUMENTS
@@ -28,7 +34,7 @@ Run:
 open-image --provider openai --prompt "$ARGUMENTS"
 ```
 
-Report the saved file path and provider. Do not retry with a different provider if the command fails. If setup is missing, tell the user to run /open-image:setup.
+Report the saved file path and provider. Do not retry with a different provider if the command fails. If setup is missing, tell the user to run /open-image setup.
 EOF
 
 echo "Installed user command alias: $TARGET"

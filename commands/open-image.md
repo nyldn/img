@@ -20,4 +20,4 @@ Run:
 open-image --provider openai --prompt "$ARGUMENTS"
 ```
 
-Report the saved file path and provider. Do not retry with a different provider if the command fails. If setup is missing, tell the user to run `/open-image:setup`.
+Report the saved file path and provider. Do not retry with a different provider if the command fails. If setup is missing, tell the user to run `/open-image setup`.

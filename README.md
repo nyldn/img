@@ -34,9 +34,13 @@ Marketplace install:
 /plugin install open-image@open-image-marketplace
 ```
 
-Plugin commands are namespaced by Claude Code:
+The Claude installer creates a bare user command:
 
-- `/open-image:open-image`
+- `/open-image`
+- `/open-image setup`
+
+Marketplace plugin commands remain available as compatibility commands:
+
 - `/open-image:setup`
 - `/open-image:openai`
 - `/open-image:gemini`
