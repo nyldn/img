@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -21,6 +21,13 @@ test("parseArgs defaults to OpenAI GPT Image 2", () => {
   assert.equal(args.provider, "openai");
   assert.equal(args.model, OPENAI_DEFAULT_MODEL);
   assert.equal(args.prompt, "A clean app icon");
+});
+
+test("parseArgs accepts a natural language request without flags", () => {
+  const args = parseArgs(["generate", "a", "photorealistic", "2:1", "image", "of", "a", "dog"]);
+  assert.equal(args.provider, "openai");
+  assert.equal(args.model, OPENAI_DEFAULT_MODEL);
+  assert.equal(args.prompt, "generate a photorealistic 2:1 image of a dog");
 });
 
 test("parseArgs uses Gemini default model when selected", () => {
@@ -135,4 +142,17 @@ test("run dry-run returns provider metadata", async () => {
   assert.equal(result.dryRun, true);
   assert.equal(result.provider, "gemini");
   assert.equal(result.model, GEMINI_DEFAULT_MODEL);
+});
+
+test("setup creates a local env template without requiring API keys", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "open-image-setup-"));
+  const result = await run(["setup", "--cwd", cwd]);
+  const envPath = join(cwd, ".env.local");
+  assert.equal(result.setup, true);
+  assert.equal(result.defaultProvider, "openai");
+  assert.equal(result.envFile, envPath);
+  assert.equal(result.envFileCreated, true);
+  assert.equal(result.keys.openai, "missing");
+  assert.equal(existsSync(envPath), true);
+  assert.match(readFileSync(envPath, "utf8"), /OPEN_IMAGE_PROVIDER=openai/);
 });

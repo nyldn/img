@@ -23,6 +23,12 @@ Use this skill when the user wants image generation or image editing through the
 
 ## Commands
 
+Set up local environment:
+
+```bash
+open-image setup
+```
+
 Generate with OpenAI:
 
 ```bash
@@ -44,3 +50,4 @@ open-image --provider openai --input ./reference.png --prompt "$ARGUMENTS"
 
 Use `--dry-run` before a costly or uncertain request to validate options without calling either API.
 
+For the default Claude command path, treat `$ARGUMENTS` as natural language. Do not ask the user to rewrite a prompt as flags.

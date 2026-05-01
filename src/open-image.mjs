@@ -56,6 +56,7 @@ function readValue(argv, index, flag) {
 
 export function parseArgs(argv = []) {
   const args = {
+    setup: false,
     provider: process.env.OPEN_IMAGE_PROVIDER || "openai",
     prompt: "",
     inputs: [],
@@ -82,6 +83,10 @@ export function parseArgs(argv = []) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     switch (token) {
+      case "setup":
+      case "--setup":
+        args.setup = true;
+        break;
       case "--provider":
         args.provider = readValue(argv, i, token);
         i += 1;
@@ -257,6 +262,7 @@ function timestamp() {
 
 export function validateArgs(args, requireKeys = true) {
   if (args.help) return;
+  if (args.setup) return;
   if (!PROVIDERS.has(args.provider)) {
     throw new Error(`Unsupported provider "${args.provider}". Use openai or gemini.`);
   }
@@ -286,6 +292,48 @@ export function validateArgs(args, requireKeys = true) {
     if (args.mask) throw new Error("--mask is only supported with --provider openai");
     if (requireKeys && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required for --provider gemini");
   }
+}
+
+function envStatus(value) {
+  if (!value) return "missing";
+  if (value.includes("...") || value.toLowerCase().includes("your-key")) return "placeholder";
+  return "present";
+}
+
+function writeSetupEnvFile(envPath) {
+  if (existsSync(envPath)) return false;
+  mkdirSync(dirname(envPath), { recursive: true });
+  const content = [
+    "OPENAI_API_KEY=",
+    "GEMINI_API_KEY=",
+    "OPEN_IMAGE_PROVIDER=openai",
+    "OPEN_IMAGE_OUTPUT_DIR=./open-image-output",
+    "",
+  ].join("\n");
+  writeFileSync(envPath, content, { mode: 0o600 });
+  return true;
+}
+
+function setupCommand(args, loadedEnvFiles) {
+  const envPath = resolve(args.cwd, args.envFile || ".env.local");
+  const created = writeSetupEnvFile(envPath);
+  const defaultProvider = process.env.OPEN_IMAGE_PROVIDER || "openai";
+  return {
+    setup: true,
+    envFile: envPath,
+    envFileCreated: created,
+    defaultProvider,
+    keys: {
+      openai: envStatus(process.env.OPENAI_API_KEY),
+      gemini: envStatus(process.env.GEMINI_API_KEY),
+    },
+    loadedEnvFiles,
+    nextSteps: [
+      "Add OPENAI_API_KEY to the env file for the default /open-image path.",
+      "Add GEMINI_API_KEY only if you want Gemini image generation too.",
+      "Run: open-image generate a photorealistic 2:1 image of a dog",
+    ],
+  };
 }
 
 export function buildOpenAIJsonBody(args) {
@@ -583,6 +631,8 @@ export function helpText() {
   return `Open Image
 
 Usage:
+  open-image setup
+  open-image generate a photorealistic 2:1 image of a dog
   open-image --provider openai --prompt "A clean app icon"
   open-image --provider gemini --prompt "A clean app icon" --aspect 1:1 --image-size 1K
   open-image --provider gemini --input ./reference.png --prompt "Restyle this image"
@@ -609,6 +659,7 @@ export async function run(rawArgs = []) {
   const args = parseArgs(rawArgs);
   if (args.help) return { text: helpText() };
   const loadedEnvFiles = loadEnv(args);
+  if (args.setup) return setupCommand(args, loadedEnvFiles);
   validateArgs(args, !args.dryRun);
 
   const endpoint = args.provider === "openai"

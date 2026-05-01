@@ -9,25 +9,21 @@ There is no fallback between providers. Pick the provider you want and the comma
 
 ## Setup
 
-Create a `.env` file in the project where you run the command:
+Run setup first:
 
 ```bash
-OPENAI_API_KEY=...
-GEMINI_API_KEY=...
-OPEN_IMAGE_PROVIDER=openai
-OPEN_IMAGE_OUTPUT_DIR=./open-image-output
+open-image setup
 ```
 
-## CLI
+Then add `OPENAI_API_KEY` to the created `.env.local`. Add `GEMINI_API_KEY` only if you want Gemini too.
+
+## Natural Language
 
 ```bash
-open-image --provider openai --prompt "A clean app icon for a photo editor"
-open-image --provider gemini --prompt "A clean app icon for a photo editor" --aspect 1:1 --image-size 1K
-open-image --provider gemini --input ./reference.png --prompt "Restyle this as a polished product shot"
-open-image --provider openai --input ./reference.png --prompt "Turn this into a polished product shot"
+open-image generate a photorealistic 2:1 image of a dog
 ```
 
-Use `--dry-run` to validate options without calling either API.
+The default provider is OpenAI `gpt-image-2`. There is no fallback between providers.
 
 ## Claude Code
 
@@ -41,6 +37,7 @@ Marketplace install:
 Plugin commands are namespaced by Claude Code:
 
 - `/open-image:open-image`
+- `/open-image:setup`
 - `/open-image:openai`
 - `/open-image:gemini`
 - `/open-image:edit`
@@ -67,4 +64,3 @@ Then restart Codex and enable `open-image` from `/plugins`.
 npm test
 npm run validate
 ```
-

@@ -8,27 +8,28 @@ mkdir -p "$TARGET_DIR"
 cat > "$TARGET" <<'EOF'
 ---
 description: Generate an image with the Open Image CLI.
-argument-hint: [prompt]
-allowed-tools: Bash(open-image:*)
+argument-hint: "[natural language image request]"
+allowed-tools: "Bash(open-image:*)"
 ---
 
 # Open Image Alias
 
-Generate an image from this prompt:
+Generate an image from the user's natural language request:
 
 ```text
 $ARGUMENTS
 ```
 
+Default to OpenAI `gpt-image-2`. Preserve aspect, style, size, and subject words from the user request inside the prompt. Do not ask the user to translate their request into CLI flags.
+
 Run:
 
 ```bash
-open-image --prompt "$ARGUMENTS"
+open-image --provider openai --prompt "$ARGUMENTS"
 ```
 
-Use `OPEN_IMAGE_PROVIDER` from `.env` when present; otherwise use OpenAI. Do not fall back to another provider after an error.
+Report the saved file path and provider. Do not retry with a different provider if the command fails. If setup is missing, tell the user to run /open-image:setup.
 EOF
 
 echo "Installed user command alias: $TARGET"
 echo "Restart Claude Code, then use /open-image."
-
