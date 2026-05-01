@@ -8,6 +8,7 @@ import {
   OPENAI_DEFAULT_MODEL,
   applyConfigDefaults,
   apiErrorFromResponse,
+  activationText,
   buildGeminiBody,
   buildOpenAIJsonBody,
   composePrompt,
@@ -31,6 +32,19 @@ test("parseArgs accepts a natural language request without flags", () => {
   assert.equal(args.provider, "openai");
   assert.equal(args.model, OPENAI_DEFAULT_MODEL);
   assert.equal(args.prompt, "generate a photorealistic 2:1 image of a dog");
+});
+
+test("activate prints the image workflow loader", async () => {
+  const result = await run(["activate"]);
+  assert.equal(result.text, activationText());
+  assert.match(result.text, /img image workflow loader/);
+  assert.match(result.text, /🖼️/);
+});
+
+test("activate remains usable as natural language when it is not the whole command", () => {
+  const args = parseArgs(["activate", "a", "neon", "product", "photo"]);
+  assert.equal(args.activate, false);
+  assert.equal(args.prompt, "activate a neon product photo");
 });
 
 test("parseArgs uses Gemini default model when selected", () => {

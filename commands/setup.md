@@ -6,9 +6,10 @@ allowed-tools: "Bash(img:*)"
 
 # img Setup
 
-Run the setup check:
+Activate the terminal loader, then run the setup check:
 
 ```bash
+img activate
 img setup
 ```
 

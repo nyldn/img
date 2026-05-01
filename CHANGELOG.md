@@ -6,5 +6,7 @@
 - Added Claude plugin manifest, commands, and skill.
 - Added Codex plugin manifest and installer.
 - Added provider CLI for OpenAI `gpt-image-2` and Google `gemini-3.1-flash-image-preview`.
+- Added `img activate` terminal loader with an image emoji and ASCII wordmark.
+- Added README VHS demo for Claude `/img`, Codex `$img`, setup, and project-aware planning flows.
 - Added tests, validation script, and GitHub Actions CI.
 - Added `img.config.json` setup template for model defaults, pre-prompts, and negative prompts.

@@ -63,6 +63,7 @@ export function parseArgs(argv = []) {
   const args = {
     _explicit: new Set(),
     setup: false,
+    activate: false,
     configFile: "",
     provider: process.env.IMG_PROVIDER || "openai",
     prompt: "",
@@ -90,6 +91,18 @@ export function parseArgs(argv = []) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     switch (token) {
+      case "activate":
+      case "banner":
+        if (i === 0 && argv.length === 1) {
+          args.activate = true;
+        } else {
+          positional.push(token);
+        }
+        break;
+      case "--activate":
+      case "--banner":
+        args.activate = true;
+        break;
       case "setup":
       case "--setup":
         args.setup = true;
@@ -800,6 +813,7 @@ export function helpText() {
   return `img
 
 Usage:
+  img activate
   img setup
   img generate a photorealistic 2:1 image of a dog
   img --provider openai --prompt "A clean app icon"
@@ -825,8 +839,23 @@ Options:
 `;
 }
 
+export function activationText() {
+  return `
+ _                 🖼️
+(_)_ __ ___   __ _
+| | '_ \` _ \\ / _\` |
+| | | | | | | (_| |
+|_|_| |_| |_|\\__, |
+             |___/
+
+img image workflow loader
+context -> plan -> generate -> deliver
+`;
+}
+
 export async function run(rawArgs = []) {
   const args = parseArgs(rawArgs);
+  if (args.activate) return { text: activationText() };
   if (args.help) return { text: helpText() };
   const loadedEnvFiles = loadEnv(args);
   if (args.setup) return setupCommand(args, loadedEnvFiles);

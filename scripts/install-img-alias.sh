@@ -17,6 +17,7 @@ allowed-tools: "Bash(img:*)"
 If the user runs `/img setup`, run the setup workflow:
 
 ```bash
+img activate
 img setup
 ```
 
@@ -28,9 +29,10 @@ $ARGUMENTS
 
 Default to OpenAI `gpt-image-2`. Preserve aspect, style, size, and subject words from the user request inside the prompt. Do not ask the user to translate their request into CLI flags.
 
-Run:
+Activate the terminal loader, then run:
 
 ```bash
+img activate
 img --provider openai --prompt "$ARGUMENTS"
 ```
 
