@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate manifests and docs
+        run: npm run validate
+      - name: Run tests
+        run: npm test
+      - name: Smoke test CLI
+        run: |
+          node bin/img activate
+          node bin/img --dry-run --provider openai --prompt "A minimal app icon"
+          node bin/img --dry-run --provider gemini --prompt "A minimal app icon"
