@@ -1,13 +1,11 @@
 # 🖼️ Image Agency
 
-Image Agency is the public-facing name for the `img` Claude Code and Codex workflow: natural language in, planned on-brand image work out.
+Image Agency is a Claude Code and Codex Image generation tool for brands and agencies working across one or multiple clients
 
 It can call:
 
 - OpenAI `gpt-image-2`
 - Google `gemini-3.1-flash-image-preview`
-
-There is no fallback between providers. Pick the provider you want, or use the project defaults, and Image Agency reports that provider's result or error.
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Image Agency demo showing Claude /img, Codex $img, planning, setup, and generated asset workflow" width="720">
