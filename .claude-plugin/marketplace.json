@@ -1,0 +1,34 @@
+{
+  "name": "nyldn-plugins",
+  "owner": {
+    "name": "nyldn",
+    "url": "https://github.com/nyldn"
+  },
+  "metadata": {
+    "description": "Claude Code plugins from nyldn.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "img",
+      "source": "./",
+      "description": "Image Agency: generate and edit images with OpenAI GPT Image 2 and Gemini 3.1 Flash Image Preview. Run /img:setup.",
+      "version": "0.1.0",
+      "author": {
+        "name": "nyldn",
+        "url": "https://github.com/nyldn"
+      },
+      "repository": "https://github.com/nyldn/img",
+      "homepage": "https://github.com/nyldn/img",
+      "license": "MIT",
+      "keywords": [
+        "image-generation",
+        "gpt-image-2",
+        "gemini-3.1-flash-image-preview",
+        "claude-code-plugin",
+        "codex"
+      ],
+      "category": "creative"
+    }
+  ]
+}

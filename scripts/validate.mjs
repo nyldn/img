@@ -15,16 +15,27 @@ function assert(condition, message) {
 
 const packageJson = readJson("package.json");
 const claudeManifest = readJson(".claude-plugin/plugin.json");
+const claudeMarketplace = readJson(".claude-plugin/marketplace.json");
 const codexManifest = readJson(".codex-plugin/plugin.json");
+const codexMarketplace = readJson(".agents/plugins/marketplace.json");
 
 assert(packageJson.version === claudeManifest.version, "package.json and Claude manifest versions differ");
 assert(packageJson.version === codexManifest.version, "package.json and Codex manifest versions differ");
 assert(claudeManifest.name === "img", "Claude manifest name must be img");
 assert(codexManifest.name === "img", "Codex manifest name must be img");
+assert(claudeMarketplace.name === "nyldn-plugins", "Claude marketplace name must be nyldn-plugins");
+assert(claudeMarketplace.plugins?.[0]?.name === claudeManifest.name, "Claude marketplace plugin name must match plugin manifest");
+assert(claudeMarketplace.plugins?.[0]?.source === "./", "Claude marketplace plugin source must be ./");
+assert(claudeMarketplace.plugins?.[0]?.version === claudeManifest.version, "Claude marketplace plugin version must match plugin manifest");
+assert(codexMarketplace.name === "nyldn-plugins", "Codex marketplace name must be nyldn-plugins");
+assert(codexMarketplace.plugins?.[0]?.name === codexManifest.name, "Codex marketplace plugin name must match plugin manifest");
+assert(codexMarketplace.plugins?.[0]?.source?.path === "./", "Codex marketplace plugin source path must be ./");
 
 const requiredFiles = [
   "bin/img",
   "src/img.mjs",
+  ".claude-plugin/marketplace.json",
+  ".agents/plugins/marketplace.json",
   "commands/img.md",
   "commands/openai.md",
   "commands/gemini.md",
@@ -124,4 +135,4 @@ validateSchema(readJson("schemas/plan.schema.json"), readJson("tests/fixtures/pl
 validateSchema(readJson("schemas/manifest.schema.json"), readJson("tests/fixtures/manifest.sample.json"), "tests/fixtures/manifest.sample.json");
 validateSchema(readJson("schemas/recipe.schema.json"), readJson("tests/fixtures/recipe.sample.json"), "tests/fixtures/recipe.sample.json");
 
-console.log(JSON.stringify({ ok: true, checked: requiredFiles.length + 19 }, null, 2));
+console.log(JSON.stringify({ ok: true, checked: requiredFiles.length + 29 }, null, 2));

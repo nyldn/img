@@ -29,16 +29,24 @@ Calls one of two providers, with **no automatic fallback**:
 
 ## Install
 
-`img` ships in three forms. Pick the one that matches how you work. Claude Code users can start with the marketplace plugin. Codex users install the plugin from a local source checkout in this release. Terminal users install the CLI on `$PATH`.
+`img` ships in three forms. Pick the one that matches how you work. Claude Code and Codex users can add the public marketplace directly from GitHub. Terminal users install the CLI on `$PATH`.
 
 ### 1. Claude Code plugin
 
-```text
-/plugin marketplace add nyldn/img
-/plugin install img@img-marketplace
+Run this in your terminal, not inside a Claude Code session:
+
+```bash
+claude plugin marketplace add https://github.com/nyldn/img.git
+claude plugin install img@nyldn-plugins
 ```
 
-Restart Claude Code. The plugin adds these namespaced commands and calls its bundled `bin/img`; a global CLI install is not required for Claude marketplace commands.
+Then start or restart Claude Code and run:
+
+```text
+/img:setup
+```
+
+The plugin adds these namespaced commands and calls its bundled `bin/img`; a global CLI install is not required for Claude marketplace commands.
 
 | Command | What it does |
 |---|---|
@@ -60,21 +68,9 @@ The namespaced `/img:*` forms are canonical because they stay tied to the instal
 
 ### 2. Codex plugin
 
-Current release: Codex installs from a local source checkout.
-
 ```bash
-git clone https://github.com/nyldn/img.git
-cd img
-./scripts/install-codex.sh
+codex plugin marketplace add https://github.com/nyldn/img.git
 ```
-
-The installer:
-
-- clones or updates `nyldn/img` at `~/.codex/plugins/img-repo`
-- links the plugin to `~/.codex/plugins/img`
-- writes a personal marketplace entry at `~/.agents/plugins/marketplace.json`
-
-Requirements: `git`, `gh`, and `python3`. If GitHub CLI is not authenticated, run `gh auth login` first.
 
 Restart Codex, open `/plugins`, then install or enable `img`. Use it as a natural-language skill:
 
@@ -82,15 +78,7 @@ Restart Codex, open `/plugins`, then install or enable `img`. Use it as a natura
 $img create three on-brand article header images for this project
 ```
 
-For shell commands inside Codex, call the plugin-local binary:
-
-```bash
-~/.codex/plugins/img/bin/img check-health
-```
-
-If you want to type `img ...` directly in a terminal, install the CLI separately from the [Terminal CLI](#3-terminal-cli) section.
-
-Native Codex marketplace install with `codex plugin marketplace add nyldn/img` is planned for the next repository-layout update. It is not the supported Codex install path for this release.
+If you want to type `img ...` directly in a terminal or in Codex shell commands, install the CLI separately from the [Terminal CLI](#3-terminal-cli) section.
 
 ### 3. Terminal CLI
 
@@ -339,17 +327,18 @@ command -v img
 
 If you use npm after publication, `npm install -g @nyldn/img` works too.
 
-### `codex plugin marketplace add nyldn/img` fails
+### Claude says `Marketplace file not found`
 
-This release is a plugin-root package, not a Codex marketplace-root package. Install Codex support from a source checkout instead:
+Use the full GitHub URL from a terminal:
 
 ```bash
-git clone https://github.com/nyldn/img.git
-cd img
-./scripts/install-codex.sh
+claude plugin marketplace add https://github.com/nyldn/img.git
+claude plugin install img@nyldn-plugins
 ```
 
-Then restart Codex and enable `img` from `/plugins`.
+Then restart Claude Code and run `/img:setup`.
+
+If you previously tried `/plugin marketplace add nyldn/img` inside Claude Code, remove that failed marketplace entry if it appears in `claude plugin marketplace list`, then add the full URL again from the terminal.
 
 ### `OPENAI_API_KEY is required for --provider openai`
 
@@ -421,8 +410,8 @@ You ran outside a git repo. Either `git init` the project, or pass `--cwd` to a 
 ### Claude Code plugin
 
 ```text
-/plugin uninstall img@img-marketplace
-/plugin marketplace remove nyldn/img
+claude plugin uninstall img@nyldn-plugins
+claude plugin marketplace remove nyldn-plugins
 ```
 
 If you installed the bare alias:
@@ -436,8 +425,7 @@ rm ~/.claude/commands/img.md
 In Codex, open `/plugins`, disable and remove `img`. Then:
 
 ```bash
-rm -rf ~/.codex/plugins/img-repo
-# Edit ~/.agents/plugins/marketplace.json and remove the img entry
+codex plugin marketplace remove nyldn-plugins
 ```
 
 ### CLI

@@ -13,3 +13,6 @@ tmp/
 .claude/settings.local.json
 .codex/
 .agents/
+!.agents/
+!.agents/plugins/
+!.agents/plugins/marketplace.json

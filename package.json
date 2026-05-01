@@ -31,6 +31,7 @@
   "files": [
     ".claude-plugin/",
     ".codex-plugin/",
+    ".agents/",
     "bin/",
     "commands/",
     "docs/",

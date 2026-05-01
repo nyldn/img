@@ -1,0 +1,20 @@
+{
+  "name": "nyldn-plugins",
+  "interface": {
+    "displayName": "nyldn Plugins"
+  },
+  "plugins": [
+    {
+      "name": "img",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Creative"
+    }
+  ]
+}

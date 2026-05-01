@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MARKETPLACE="nyldn/img"
-PLUGIN="img@img-marketplace"
+MARKETPLACE="https://github.com/nyldn/img.git"
+PLUGIN="img@nyldn-plugins"
 SCOPE="user"
 INSTALL_BARE_ALIAS="false"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +30,7 @@ done
 command -v claude >/dev/null 2>&1 || fail "Missing required command: claude"
 
 echo "Adding Claude marketplace $MARKETPLACE..."
-claude plugin marketplace add "$MARKETPLACE" --scope "$SCOPE" || true
+claude plugin marketplace add "$MARKETPLACE" --scope "$SCOPE"
 
 echo "Installing $PLUGIN..."
 claude plugin install "$PLUGIN" --scope "$SCOPE"
@@ -43,4 +43,4 @@ else
 fi
 
 info "Installed $PLUGIN"
-echo "Restart Claude Code, then use /img:img or /img:setup."
+echo "Restart Claude Code, then use /img:setup."
