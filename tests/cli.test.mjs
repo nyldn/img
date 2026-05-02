@@ -22,10 +22,12 @@ import {
   keyPromptLabel,
   loadConfig,
   loadEnv,
+  loadPromptRecipes,
   parseBrandColorInput,
   parseArgs,
   resolveAssetType,
   run,
+  searchPromptRecipes,
   userConfigPath,
   userEnvPath,
   validateArgs,
@@ -403,6 +405,27 @@ test("buildInstallPlan respects --no-setup", () => {
   assert.equal(plan.targets.claude.available, true);
   assert.equal(plan.targets.codex.selected, false);
   assert.equal(plan.setup.action, "skip");
+});
+
+test("bundled prompt recipes are queryable with attribution", async () => {
+  const all = loadPromptRecipes();
+  assert.ok(all.length >= 40);
+  assert.ok(all.every((recipe) => recipe.sourceUrl && recipe.license && recipe.attribution));
+
+  const matches = searchPromptRecipes("product ad storyboard", { modelFamily: "openai", limit: 3 });
+  assert.equal(matches.length, 3);
+  assert.ok(matches.every((recipe) => recipe.modelFamily === "openai"));
+  assert.ok(matches.some((recipe) => /product|ad|storyboard|ecommerce/i.test(`${recipe.category} ${recipe.useCase} ${recipe.promptTemplate}`)));
+
+  const json = await run(["recipes", "product ad storyboard", "--model-family", "openai", "--limit", "2", "--json"]);
+  assert.equal(json.recipeSearch, true);
+  assert.equal(json.recipes.length, 2);
+  assert.match(json.recipes[0].sourceUrl, /^https:\/\/github\.com\//);
+  assert.match(json.recipes[0].notice, /adapted/i);
+
+  const text = await run(["recipes", "product ad storyboard", "--limit", "1"]);
+  assert.match(text.text, /Prompt recipes: 1 of/);
+  assert.match(text.text, /license:/);
 });
 
 test("setup --json returns non-interactive setup payload", async () => {

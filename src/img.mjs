@@ -133,6 +133,11 @@ export function parseArgs(argv = []) {
     install: false,
     installTarget: "all",
     installSetup: "auto",
+    recipes: false,
+    recipeQuery: "",
+    recipeLimit: 5,
+    recipeModelFamily: "",
+    recipeCategory: "",
     key: false,
     keyAction: "status",
     keyProvider: "",
@@ -188,6 +193,14 @@ export function parseArgs(argv = []) {
             args.installTarget = argv[i + 1].toLowerCase();
             i += 1;
           }
+        } else {
+          positional.push(token);
+        }
+        break;
+      case "recipe":
+      case "recipes":
+        if (i === 0) {
+          args.recipes = true;
         } else {
           positional.push(token);
         }
@@ -252,6 +265,23 @@ export function parseArgs(argv = []) {
       case "--asset-type":
         args.assetType = readValue(argv, i, token);
         markExplicit(args, "assetType");
+        i += 1;
+        break;
+      case "--query":
+        args.recipeQuery = readValue(argv, i, token);
+        i += 1;
+        break;
+      case "--limit":
+      case "--recipe-limit":
+        args.recipeLimit = Number.parseInt(readValue(argv, i, token), 10);
+        i += 1;
+        break;
+      case "--model-family":
+        args.recipeModelFamily = readValue(argv, i, token).toLowerCase();
+        i += 1;
+        break;
+      case "--category":
+        args.recipeCategory = readValue(argv, i, token).toLowerCase();
         i += 1;
         break;
       case "--prompt":
@@ -357,7 +387,9 @@ export function parseArgs(argv = []) {
     }
   }
 
-  if (!args.prompt && positional.length > 0) {
+  if (args.recipes && !args.recipeQuery && positional.length > 0) {
+    args.recipeQuery = positional.join(" ");
+  } else if (!args.prompt && positional.length > 0) {
     args.prompt = positional.join(" ");
   }
 
@@ -603,6 +635,137 @@ export function discoverProjectBrandDefaults(projectRoot) {
     references: uniqueStrings(references),
     files: files.map((file) => relativePath(root, file)),
   };
+}
+
+function recipeIndexPath(root = pluginRoot()) {
+  return resolve(root, "resources", "prompt-recipes.jsonl");
+}
+
+export function loadPromptRecipes(root = pluginRoot()) {
+  const filePath = recipeIndexPath(root);
+  if (!existsSync(filePath)) return [];
+  return readFileSync(filePath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        throw new Error(`Invalid prompt recipe JSON at ${filePath}:${index + 1}: ${error.message}`);
+      }
+    });
+}
+
+function searchTokens(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
+}
+
+function recipeSearchHaystack(recipe) {
+  return [
+    recipe.id,
+    recipe.modelFamily,
+    recipe.category,
+    recipe.useCase,
+    recipe.promptTemplate,
+    recipe.variables?.join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+export function searchPromptRecipes(query = "", options = {}) {
+  const recipes = loadPromptRecipes(options.root);
+  const modelFamily = String(options.modelFamily || "").toLowerCase();
+  const category = String(options.category || "").toLowerCase();
+  const tokens = searchTokens(query);
+  const limit = Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 5;
+
+  return recipes
+    .filter((recipe) => !modelFamily || recipe.modelFamily === modelFamily)
+    .filter((recipe) => !category || recipe.category === category)
+    .map((recipe) => {
+      const haystack = recipeSearchHaystack(recipe);
+      const score = tokens.length === 0
+        ? 1
+        : tokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 : 0), 0);
+      const categoryBoost = category && recipe.category === category ? 3 : 0;
+      const modelBoost = modelFamily && recipe.modelFamily === modelFamily ? 2 : 0;
+      return { ...recipe, score: score + categoryBoost + modelBoost };
+    })
+    .filter((recipe) => tokens.length === 0 || recipe.score > 0)
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .slice(0, limit);
+}
+
+function excerpt(value, max = 360) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function formatRecipeList(result) {
+  if (result.recipes.length === 0) {
+    return [
+      "No prompt recipes matched.",
+      `Index: ${result.indexPath}`,
+    ].join("\n");
+  }
+  const lines = [
+    `Prompt recipes: ${result.recipes.length} of ${result.total} indexed`,
+    `Index: ${result.indexPath}`,
+    "",
+  ];
+  for (const recipe of result.recipes) {
+    lines.push(
+      `- ${recipe.useCase} [${recipe.modelFamily}/${recipe.category}]`,
+      `  id: ${recipe.id}`,
+      `  source: ${recipe.sourceRepo} @ ${recipe.sourceCommit.slice(0, 7)}`,
+      `  license: ${recipe.license}`,
+      `  prompt: ${excerpt(recipe.promptTemplate)}`,
+      "",
+    );
+  }
+  return lines.join("\n").trimEnd();
+}
+
+function recipeCommand(args) {
+  if (!Number.isInteger(args.recipeLimit) || args.recipeLimit < 1 || args.recipeLimit > 25) {
+    throw new Error("--recipe-limit must be an integer from 1 to 25");
+  }
+  if (args.recipeModelFamily && !["openai", "gemini"].includes(args.recipeModelFamily)) {
+    throw new Error("--model-family must be openai or gemini");
+  }
+  const all = loadPromptRecipes();
+  const recipes = searchPromptRecipes(args.recipeQuery, {
+    limit: args.recipeLimit,
+    modelFamily: args.recipeModelFamily,
+    category: args.recipeCategory,
+  });
+  const result = {
+    recipeSearch: true,
+    query: args.recipeQuery,
+    total: all.length,
+    indexPath: recipeIndexPath(),
+    matches: recipes.length,
+    recipes: recipes.map((recipe) => ({
+      schemaVersion: recipe.schemaVersion,
+      id: recipe.id,
+      modelFamily: recipe.modelFamily,
+      category: recipe.category,
+      useCase: recipe.useCase,
+      sourceRepo: recipe.sourceRepo,
+      sourceUrl: recipe.sourceUrl,
+      sourceCommit: recipe.sourceCommit,
+      license: recipe.license,
+      attribution: recipe.attribution,
+      notice: recipe.notice,
+      promptTemplate: recipe.promptTemplate,
+      variables: recipe.variables || [],
+      score: recipe.score,
+    })),
+  };
+  return args.json ? result : { text: formatRecipeList(result) };
 }
 
 export function composePrompt(userPrompt, promptConfig = {}) {
@@ -2176,6 +2339,7 @@ Usage:
   img activate
   img install [claude|codex|all] [--setup|--no-setup]
   img setup [--user|--project|--both] [--open-terminal]
+  img recipes [query] [--model-family openai|gemini] [--category VALUE] [--limit N]
   img key status
   img key set openai
   img key set gemini
@@ -2204,6 +2368,10 @@ Options:
   --count N                      Number of images to generate, 1-${MAX_IMAGES_PER_RUN}.
   --open                         Open the first saved image with the OS viewer.
   --dry-run                      Validate and print request metadata without API calls.
+  --query TEXT                   Query bundled prompt recipes.
+  --model-family openai|gemini   Filter bundled prompt recipes.
+  --category VALUE               Filter bundled prompt recipes by category.
+  --recipe-limit N               Prompt recipes to return, 1-25. Default: 5.
   --json                         Return non-interactive JSON for setup/install.
 `;
 }
@@ -2218,6 +2386,7 @@ export async function run(rawArgs = []) {
   const args = parseArgs(rawArgs);
   if (args.activate) return { text: activationText() };
   if (args.help) return { text: helpText() };
+  if (args.recipes) return recipeCommand(args);
   const loadedEnvFiles = loadEnv(args);
   if (args.key) return keyCommand(args, loadedEnvFiles);
   const loadedCredentialKeys = args.dryRun ? [] : loadStoredProviderKeys();

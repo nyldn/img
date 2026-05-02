@@ -7,6 +7,10 @@ Calls one of two providers, with **no automatic fallback**:
 - OpenAI `gpt-image-2`
 - Google `gemini-3.1-flash-image-preview`
 
+The plugin also ships a small attributed prompt-recipe index generated from
+dev-only research checkouts. Claude and Codex can query it with `img recipes`
+before writing the final provider prompt.
+
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Image Agency demo showing Claude /img, Codex $img, planning, setup, and generated asset workflow" width="720">
 </p>
@@ -261,6 +265,21 @@ Reports config layers, key presence (without printing values), output writabilit
 
 Full setup reference: [`docs/setup-file.md`](docs/setup-file.md).
 
+### Prompt Recipes
+
+Use `img recipes` to inspect the bundled research index before writing a
+complex prompt:
+
+```bash
+img recipes "product hero website banner" --model-family openai --limit 4
+img recipes "reference image restyle diagram" --model-family gemini --json
+```
+
+Recipes include source repository, URL, commit, license, attribution, model
+family, category, use case, prompt template, and variables. They are generated
+from local dev checkouts under `dependencies/`; those upstream repos are not
+bundled in the npm package.
+
 ---
 
 ## Use cases
@@ -374,6 +393,8 @@ img install [claude|codex|all]              # install native agent plugins
 img install --no-setup                      # install plugins without opening setup
 img setup [--user|--project|--both]         # open setup panel or return JSON in non-TTY
 img setup --open-terminal                   # open the rich setup panel in macOS Terminal
+img recipes "product hero"                  # search bundled attributed prompt recipes
+img recipes "poster" --model-family openai --limit 4 --json
 img key status                              # inspect key presence without values
 img key set openai                          # save OPENAI_API_KEY in macOS Keychain
 img key set gemini                          # save GEMINI_API_KEY in macOS Keychain

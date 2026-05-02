@@ -1,0 +1,8 @@
+img includes a generated prompt recipe index in resources/prompt-recipes.jsonl.
+
+The recipe index is derived from local dependency checkouts and includes
+per-recipe source repository, source URL, commit, license, attribution, and
+notice metadata. The upstream dependency repositories themselves are not
+bundled in this package.
+
+See resources/NOTICE.md for the current source list.

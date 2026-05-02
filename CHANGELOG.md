@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.18 - 2026-05-02
+
+- Added a bundled, attributed prompt recipe index generated from the dev-only
+  dependency checkouts.
+- Added `img recipes` search so Claude/Codex can query model-specific prompt
+  patterns before generating images.
+- Reworked the img skill from an operational wrapper into a model-aware image
+  direction playbook for OpenAI `gpt-image-2` and Gemini
+  `gemini-3.1-flash-image-preview`.
+
 ## 0.1.17 - 2026-05-02
 
 - Made `img install` run `codex plugin marketplace upgrade nyldn-plugins` after

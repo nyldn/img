@@ -65,6 +65,8 @@ const requiredFiles = [
   "docs/assets/demo.gif",
   "docs/demo/img-demo.sh",
   "docs/demo/img-demo.tape",
+  "resources/prompt-recipes.jsonl",
+  "resources/NOTICE.md",
   "skills/img/SKILL.md",
   "templates/img.config.json",
   "schemas/config.schema.json",
@@ -78,6 +80,7 @@ const requiredFiles = [
   "README.md",
   "CHANGELOG.md",
   "LICENSE",
+  "NOTICE",
 ];
 
 for (const file of requiredFiles) {
@@ -94,6 +97,7 @@ for (const command of ["commands/openai.md", "commands/gemini.md", "commands/edi
 const skill = readFileSync(join(root, "skills/img/SKILL.md"), "utf8");
 assert(skill.includes("gpt-image-2"), "Skill must mention gpt-image-2");
 assert(skill.includes("gemini-3.1-flash-image-preview"), "Skill must mention Gemini model");
+assert(skill.includes("recipes \"$ARGUMENTS\""), "Skill must tell agents to use bundled prompt recipes");
 assert(skill.includes(`version: ${packageJson.version}`), "Skill must include version frontmatter");
 
 function typeMatches(value, expected) {
@@ -154,5 +158,11 @@ validateSchema(configSchema, configTemplate, "templates/img.config.json");
 validateSchema(readJson("schemas/plan.schema.json"), readJson("tests/fixtures/plan.sample.json"), "tests/fixtures/plan.sample.json");
 validateSchema(readJson("schemas/manifest.schema.json"), readJson("tests/fixtures/manifest.sample.json"), "tests/fixtures/manifest.sample.json");
 validateSchema(readJson("schemas/recipe.schema.json"), readJson("tests/fixtures/recipe.sample.json"), "tests/fixtures/recipe.sample.json");
+const recipeSchema = readJson("schemas/recipe.schema.json");
+const recipeLines = readFileSync(join(root, "resources/prompt-recipes.jsonl"), "utf8").trim().split(/\r?\n/).filter(Boolean);
+assert(recipeLines.length >= 40, "Prompt recipe index must contain at least 40 recipes");
+for (const [index, line] of recipeLines.entries()) {
+  validateSchema(recipeSchema, JSON.parse(line), `resources/prompt-recipes.jsonl:${index + 1}`);
+}
 
-console.log(JSON.stringify({ ok: true, checked: requiredFiles.length + 29 }, null, 2));
+console.log(JSON.stringify({ ok: true, checked: requiredFiles.length + 30 + recipeLines.length }, null, 2));

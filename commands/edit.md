@@ -10,6 +10,14 @@ Edit or restyle an existing image. Prefer explicit flags for the provider and
 input path, then preserve the remaining user words as the edit prompt. If the
 input path is missing, ask for it before running the command.
 
+For non-trivial edits, inspect bundled edit/restyle recipes first:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/img" recipes "$ARGUMENTS edit restyle reference image" --limit 4 --json
+```
+
+Use recipe patterns to separate what must be preserved from what should change.
+
 Run img with the selected provider and image path:
 
 ```bash
