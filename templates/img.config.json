@@ -17,13 +17,19 @@
   "brand": {
     "prePrompts": [],
     "negativePrompts": [],
-    "references": []
+    "references": [],
+    "colors": {
+      "primary": "",
+      "secondary": "",
+      "accent": ""
+    }
   },
   "assetTypes": {
     "hero": {
       "aliases": ["hero image", "homepage hero"],
       "provider": "openai",
       "aspect": "16:9",
+      "count": 1,
       "size": "auto",
       "style": "",
       "outputDir": "public/generated/hero",
@@ -34,6 +40,7 @@
       "aliases": ["feature card", "feature tile", "benefit card", "benefit tile"],
       "provider": "openai",
       "aspect": "4:3",
+      "count": 1,
       "size": "auto",
       "style": "",
       "outputDir": "public/generated/features",

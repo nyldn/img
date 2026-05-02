@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MARKETPLACE="https://github.com/nyldn/img.git"
+MARKETPLACE="https://github.com/nyldn/plugins.git"
 PLUGIN_NAME="img"
 INSTALL_LOCAL="false"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

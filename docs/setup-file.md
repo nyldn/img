@@ -1,7 +1,8 @@
 # Setup Files
 
-`img setup` prepares Image Agency for both personal defaults and shared project
-defaults.
+`img setup` prepares img for both personal defaults and shared project defaults.
+The default generation path also creates the user env/config files on first run
+when the selected provider key is missing.
 
 Default behavior:
 
@@ -14,8 +15,13 @@ Explicit modes:
 img setup --user
 img setup --project
 img setup --both
+img setup --json
 img check-health
 ```
+
+In an interactive terminal, `img setup` opens the setup control panel. In
+Claude, Codex, CI, or any non-TTY environment, use `img setup --json` or the
+default non-interactive JSON output.
 
 ## User Files
 
@@ -33,6 +39,18 @@ OPENAI_API_KEY=
 GEMINI_API_KEY=
 ```
 
+On macOS, Keychain is preferred for local API keys:
+
+```bash
+img key set openai
+img key set gemini
+img key status
+```
+
+Claude Code and Codex do not need to receive the key. They run the local `img`
+binary, and that process reads the provider key from Keychain at runtime. Keep
+`.env.local` for CI, non-macOS machines, or explicit project-local overrides.
+
 Use `config.json` for personal provider, output, and prompt defaults. These
 defaults are applied before project config.
 
@@ -46,6 +64,9 @@ img.config.json
 
 It stores team-safe defaults such as brand prompts, asset types, destinations,
 ratios, naming rules, and cost limits. Do not put API keys in this file.
+Use it for settings the LLM should not have to restate on every image request:
+pre-prompts, negative prompts, brand colors, reference files, asset aliases,
+aspect ratios, output folders, filename patterns, and batch counts.
 
 Precedence:
 
@@ -61,7 +82,8 @@ replace that object's supported arrays instead of appending to them.
 Environment values already present in the shell or agent process take
 precedence over env files. Missing values are filled from the explicit
 `--env-file`, nearest project `.env.local`, nearest project `.env`, then
-`~/.config/img/.env.local`.
+`~/.config/img/.env.local`. If the selected provider key is still missing on
+macOS, `img` reads the matching Keychain item before calling the provider API.
 
 ## Template
 
@@ -85,13 +107,19 @@ precedence over env files. Missing values are filled from the explicit
   "brand": {
     "prePrompts": [],
     "negativePrompts": [],
-    "references": []
+    "references": [],
+    "colors": {
+      "primary": "",
+      "secondary": "",
+      "accent": ""
+    }
   },
   "assetTypes": {
     "hero": {
       "aliases": ["hero image", "homepage hero"],
       "provider": "openai",
       "aspect": "16:9",
+      "count": 1,
       "size": "auto",
       "style": "",
       "outputDir": "public/generated/hero",
@@ -102,6 +130,7 @@ precedence over env files. Missing values are filled from the explicit
       "aliases": ["feature card", "feature tile", "benefit card", "benefit tile"],
       "provider": "openai",
       "aspect": "4:3",
+      "count": 1,
       "size": "auto",
       "style": "",
       "outputDir": "public/generated/features",

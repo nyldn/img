@@ -8,7 +8,7 @@ Calls one of two providers, with **no automatic fallback**:
 - Google `gemini-3.1-flash-image-preview`
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="Image Agency demo showing Claude /img:img, Codex $img, planning, setup, and generated asset workflow" width="720">
+  <img src="docs/assets/demo.gif" alt="Image Agency demo showing Claude /img, Codex $img, planning, setup, and generated asset workflow" width="720">
 </p>
 
 ---
@@ -29,9 +29,43 @@ Calls one of two providers, with **no automatic fallback**:
 
 ## Install
 
-`img` ships in three forms. Pick the one that matches how you work. Claude Code and Codex users can add the public marketplace directly from GitHub. Terminal users install the CLI on `$PATH`.
+The recommended install is CLI-first. It gives you a real `img` terminal command,
+then uses that command to install the native Claude Code and Codex marketplace
+plugins when those CLIs are present.
 
-### 1. Claude Code plugin
+### 1. Recommended: npm CLI + agent plugins
+
+```bash
+npm install -g @nyldn.sh/img
+img install
+```
+
+If you need to install directly from source instead of npm registry:
+
+```bash
+npm install -g https://github.com/nyldn/img.git
+```
+
+`img install` detects Claude Code and Codex, adds the shared `nyldn-plugins`
+marketplace, installs what each CLI can install non-interactively, refreshes the
+Claude `/img` base command, and opens the interactive setup panel on first
+install when a real terminal is available.
+
+Use explicit targets when needed:
+
+```bash
+img install claude
+img install codex
+img install --no-setup
+```
+
+After install, run the setup panel any time:
+
+```bash
+img setup
+```
+
+### 2. Claude Code marketplace-only
 
 Run this in your terminal, not inside a Claude Code session:
 
@@ -47,37 +81,43 @@ claude plugin install img@nyldn-plugins
 claude plugin install img@nyldn-plugins
 ```
 
-Then start or restart Claude Code and run:
+Marketplace-only installs provide the bundled plugin binary and namespaced
+commands. For the best local setup experience, use the npm flow above so `img
+setup` is available on `$PATH`.
+
+Then start or restart Claude Code and run a normal image request:
 
 ```text
-/img:setup
+/img a clean app icon for a savings tracker
 ```
 
-The plugin adds these namespaced commands and calls its bundled `bin/img`; a global CLI install is not required for Claude marketplace commands.
+If the provider key is missing, `/img` creates user setup files and tells you the
+exact terminal command to save the key in macOS Keychain before you re-run the
+same request. The key is read by the local `img` binary, not by Claude.
+
+The plugin calls its bundled `bin/img`; a global CLI install is not required for Claude marketplace commands.
 
 | Command | What it does |
 |---|---|
-| `/img:img <natural language>` | Default generation. OpenAI `gpt-image-2`. |
-| `/img:setup` | Run setup and health checks. |
+| `/img <natural language>` | Default generation. OpenAI `gpt-image-2`. |
+| `/img setup` | Pre-create or refresh setup files and health checks. |
+| `/img:setup` | Pre-create or refresh setup files and health checks. |
 | `/img:openai <prompt>` | Force OpenAI. |
 | `/img:gemini <prompt>` | Force Gemini. |
 | `/img:edit --input <path> [--provider openai\|gemini] <prompt>` | Edit/restyle a reference image. |
 
-Optional bare `/img` alias (local user scope, not marketplace scope):
+Claude namespaces marketplace plugin commands, so `/img` is installed as a
+user-scope command that points at the installed plugin binary. The namespaced
+`/img:*` forms remain available for explicit setup, provider, and edit flows.
+
+### 3. Codex marketplace-only
 
 ```bash
-git clone https://github.com/nyldn/img.git
-cd img
-./scripts/install-claude.sh --bare-alias
+codex plugin marketplace add https://github.com/nyldn/plugins.git
 ```
 
-The namespaced `/img:*` forms are canonical because they stay tied to the installed plugin version. The bare alias does not.
-
-### 2. Codex plugin
-
-```bash
-codex plugin marketplace add https://github.com/nyldn/img.git
-```
+`nyldn-plugins` is the same shared catalog used by Claude. In Codex it lists
+`claude-octopus` and `img`.
 
 Restart Codex, open `/plugins`, then install or enable `img`. Use it as a natural-language skill:
 
@@ -85,9 +125,10 @@ Restart Codex, open `/plugins`, then install or enable `img`. Use it as a natura
 $img create three on-brand article header images for this project
 ```
 
-If you want to type `img ...` directly in a terminal or in Codex shell commands, install the CLI separately from the [Terminal CLI](#3-terminal-cli) section.
+If you want to type `img ...` directly in a terminal or in Codex shell commands,
+use the npm install from the recommended path.
 
-### 3. Terminal CLI
+### 4. Local development
 
 Install from source:
 
@@ -95,21 +136,6 @@ Install from source:
 git clone https://github.com/nyldn/img.git
 cd img
 npm link
-img activate
-```
-
-When the npm package is published, this will also work:
-
-```bash
-npm install -g @nyldn/img
-img --help
-```
-
-### 4. Local development
-
-```bash
-git clone https://github.com/nyldn/img.git
-cd img
 npm install
 npm test
 claude --plugin-dir "$(pwd)"
@@ -119,15 +145,42 @@ claude --plugin-dir "$(pwd)"
 
 ## Setup
 
-Run once after install:
+For the default path, no separate setup command is required before the first
+request. If an API key is missing, the first real generation creates:
+
+- `~/.config/img/.env.local`
+- `~/.config/img/config.json`
+
+Then save the reported key in macOS Keychain and re-run the same `/img` or
+`img` request:
+
+```bash
+img key set openai
+```
+
+Use `img key set gemini` only if you want Gemini generation too. The command
+prompts securely in your terminal and does not print the key.
+
+Run setup manually when you want the interactive control panel, a preflight
+check, refreshed user files, or a shared project `img.config.json`:
 
 ```bash
 img activate          # prints the loader banner
-img setup             # creates config + env files
+img setup             # opens the terminal setup control panel
 img check-health      # verifies install end-to-end
 ```
 
-In Claude Code, use `/img:setup` for the same setup flow.
+In Claude Code, use `/img setup` or `/img:setup` for non-interactive setup
+status. If Claude is not attached to a real terminal, it will tell you the exact
+terminal command to open the rich setup panel.
+
+The setup panel can manage:
+
+- OpenAI and Gemini keys through macOS Keychain.
+- Personal defaults such as provider, output directory, image count, format, and quality.
+- Project defaults such as brand pre-prompts, negative prompts, brand colors, and references.
+- Asset presets for repeatable hero, feature, social, ad, or batch image generation.
+- Prompt previews and health checks.
 
 `img setup` chooses scope based on cwd:
 
@@ -153,14 +206,26 @@ img setup --both      # both, even outside a repo
 
 ### Keys
 
-Add at least one key to `~/.config/img/.env.local`:
+Preferred on macOS:
+
+```bash
+img key set openai   # prompts securely and stores OPENAI_API_KEY in Keychain
+img key status       # verifies presence without printing values
+```
+
+This lets Claude Code and Codex run `img` without receiving or storing the
+secret themselves. The local CLI reads the key from macOS Keychain at runtime.
+
+For CI, Linux, or machines without Keychain, add at least one key to
+`~/.config/img/.env.local`. The file is created by the first missing-key
+generation or by `img setup`:
 
 ```bash
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
 ```
 
-`OPENAI_API_KEY` is required for the default `/img:img` path. `GEMINI_API_KEY` is only needed for `/img:gemini` and Gemini-based edits.
+`OPENAI_API_KEY` is required for the default `/img` path. `GEMINI_API_KEY` is only needed for `/img:gemini` and Gemini-based edits.
 
 Verify:
 
@@ -189,7 +254,7 @@ Saves to `./img-output/` or `IMG_OUTPUT_DIR`.
 ### Inside a Claude Code session
 
 ```text
-/img:img a clean, minimal app icon for a savings tracker, flat design, mint green
+/img a clean, minimal app icon for a savings tracker, flat design, mint green
 ```
 
 The plugin keeps your aspect, style, and subject words in the prompt. No flag translation.
@@ -210,7 +275,7 @@ Or in Claude:
 
 Inside a git repo with `img.config.json` configured:
 
-1. Set brand pre-prompts and negative prompts in `img.config.json`:
+1. Set brand pre-prompts, negative prompts, and colors in `img.config.json`:
    ```json
    {
      "brand": {
@@ -218,15 +283,35 @@ Inside a git repo with `img.config.json` configured:
          "Use a restrained, premium editorial visual style.",
          "Match the existing site palette."
        ],
-       "negativePrompts": ["No watermarks.", "No stock-photo cliches."]
+       "negativePrompts": ["No watermarks.", "No stock-photo cliches."],
+       "colors": {
+         "primary": "#123456",
+         "accent": "#ffcc00"
+       }
      }
    }
    ```
 2. Run any generation. Brand prompts are auto-composed before the user request:
    ```text
-   /img:img three feature-card illustrations for the pricing page
+   /img three feature-card illustrations for the pricing page
    ```
 3. Teammates inherit the same brand prompts after `git pull`.
+
+Use asset type `count` defaults for repeatable batch generation:
+
+```json
+{
+  "assetTypes": {
+    "hero": {
+      "aliases": ["homepage hero"],
+      "aspect": "16:9",
+      "count": 3,
+      "style": "Use a wide editorial website hero composition.",
+      "outputDir": "public/generated/hero"
+    }
+  }
+}
+```
 
 ### Multiple clients
 
@@ -261,7 +346,13 @@ In `img.config.json`:
 
 ```bash
 img activate                                # print loader banner
-img setup [--user|--project|--both]         # create config + env files
+img install [claude|codex|all]              # install native agent plugins
+img install --no-setup                      # install plugins without opening setup
+img setup [--user|--project|--both]         # open setup panel or return JSON in non-TTY
+img key status                              # inspect key presence without values
+img key set openai                          # save OPENAI_API_KEY in macOS Keychain
+img key set gemini                          # save GEMINI_API_KEY in macOS Keychain
+img key delete openai                       # remove a saved Keychain key
 img check-health                            # diagnose install end-to-end
 img <natural language>                      # generate via OpenAI gpt-image-2
 img --provider openai|gemini --prompt "..." # explicit provider
@@ -322,17 +413,16 @@ Full config schema and field-by-field docs: [`docs/setup-file.md`](docs/setup-fi
 
 ### `command not found: img`
 
-The terminal CLI is not on `$PATH`. This affects direct shell usage, Codex shell commands, and the optional bare `/img` alias. Claude Code marketplace commands use the plugin-local binary and do not need a global CLI.
+The terminal CLI is not on `$PATH`. This affects direct shell usage and Codex shell commands. Claude Code commands use the plugin-local binary and do not need a global CLI.
 
 Fix:
 ```bash
-git clone https://github.com/nyldn/img.git
-cd img
-npm link
+npm install -g @nyldn.sh/img
 command -v img
 ```
 
-If you use npm after publication, `npm install -g @nyldn/img` works too.
+For source installs, use `npm install -g https://github.com/nyldn/img.git`; for
+local checkouts, run `npm link` from the repo.
 
 ### Claude says `Marketplace file not found`
 
@@ -343,7 +433,7 @@ claude plugin marketplace add https://github.com/nyldn/plugins.git
 claude plugin install img@nyldn-plugins
 ```
 
-Then restart Claude Code and run `/img:setup`.
+Then restart Claude Code and run `/img` with a natural-language request.
 
 If you previously tried `/plugin marketplace add nyldn/img` inside Claude Code, remove that failed marketplace entry if it appears in `claude plugin marketplace list`, then add the full URL again from the terminal.
 
@@ -362,7 +452,18 @@ claude plugin install octo@nyldn-plugins
 
 ### `OPENAI_API_KEY is required for --provider openai`
 
-The key is missing from every env-file layer and from `process.env`. Either:
+The key is missing from macOS Keychain, every env-file layer, and `process.env`.
+On first real generation, img creates user setup files and reports the exact
+provider key it needs.
+
+Preferred fix on macOS:
+
+```bash
+img key set openai
+img key status
+```
+
+Fallback for CI or non-macOS machines:
 
 ```bash
 echo 'OPENAI_API_KEY=sk-...' >> ~/.config/img/.env.local
@@ -413,7 +514,9 @@ Restart Claude Code. Plugin manifests are loaded on session start.
 
 ### Conflicts with other plugins / aliases
 
-Use the namespaced forms: `/img:img`, `/img:setup`, `/img:edit`, `/img:openai`, `/img:gemini`. The bare `/img` alias is opt-in via `install-claude.sh --bare-alias`.
+Run `./scripts/install-claude.sh` again to refresh the user-scope `/img`
+command. The namespaced forms `/img:setup`, `/img:edit`, `/img:openai`, and
+`/img:gemini` remain available.
 
 ### `img check-health` reports project root not found
 
@@ -436,7 +539,7 @@ claude plugin uninstall img@nyldn-plugins
 Only remove `nyldn-plugins` if you are not using other nyldn plugins such as
 `octo`.
 
-If you installed the bare alias:
+If you installed the base command:
 
 ```bash
 rm ~/.claude/commands/img.md
@@ -453,7 +556,7 @@ codex plugin marketplace remove nyldn-plugins
 ### CLI
 
 ```bash
-npm uninstall -g @nyldn/img
+npm uninstall -g @nyldn.sh/img
 ```
 
 ### User config and secrets

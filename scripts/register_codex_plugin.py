@@ -11,6 +11,20 @@ import tempfile
 from pathlib import Path
 
 
+CODEX_OCTOPUS_ENTRY = {
+    "name": "claude-octopus",
+    "source": {
+        "source": "url",
+        "url": "https://github.com/nyldn/claude-octopus.git",
+    },
+    "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+    },
+    "category": "Orchestration",
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("plugin_root")
@@ -60,13 +74,13 @@ def ensure_personal_plugin_root(plugin_root: Path, plugin_name: str, home_root: 
 
 def load_marketplace(marketplace_path: Path) -> dict:
     if not marketplace_path.exists():
-        return {"name": "img-plugins", "plugins": []}
-
-    try:
-        with marketplace_path.open(encoding="utf-8") as handle:
-            data = json.load(handle)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid Codex marketplace JSON at {marketplace_path}: {exc}") from exc
+        data = {"name": "nyldn-plugins", "interface": {"displayName": "nyldn"}, "plugins": []}
+    else:
+        try:
+            with marketplace_path.open(encoding="utf-8") as handle:
+                data = json.load(handle)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid Codex marketplace JSON at {marketplace_path}: {exc}") from exc
 
     if not isinstance(data, dict):
         raise SystemExit(f"Codex marketplace must be a JSON object: {marketplace_path}")
@@ -74,7 +88,18 @@ def load_marketplace(marketplace_path: Path) -> dict:
     if not isinstance(data.get("plugins"), list):
         data["plugins"] = []
     if not isinstance(data.get("name"), str) or not data["name"]:
-        data["name"] = "img-plugins"
+        data["name"] = "nyldn-plugins"
+    interface = data.get("interface")
+    if not isinstance(interface, dict):
+        interface = {}
+        data["interface"] = interface
+    interface["displayName"] = "nyldn"
+    plugins = [
+        plugin
+        for plugin in data["plugins"]
+        if not (isinstance(plugin, dict) and plugin.get("name") == "claude-octopus")
+    ]
+    data["plugins"] = [dict(CODEX_OCTOPUS_ENTRY), *plugins]
     return data
 
 

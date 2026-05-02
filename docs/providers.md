@@ -4,6 +4,7 @@
 
 - Default model: `gpt-image-2`
 - API key: `OPENAI_API_KEY`
+- Local storage: `img key set openai` saves the key in macOS Keychain.
 - Text-to-image endpoint: `POST https://api.openai.com/v1/images/generations`
 - Image edit endpoint: `POST https://api.openai.com/v1/images/edits`
 - Output: base64 image data saved locally
@@ -18,6 +19,7 @@ Useful options:
 
 - Default model: `gemini-3.1-flash-image-preview`
 - API key: `GEMINI_API_KEY`
+- Local storage: `img key set gemini` saves the key in macOS Keychain.
 - Endpoint: `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent`
 - Output: inline image data saved locally
 

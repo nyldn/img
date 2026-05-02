@@ -38,15 +38,25 @@ assert(
   "Claude marketplace octo source must point at nyldn/claude-octopus",
 );
 assert(codexMarketplace.name === "nyldn-plugins", "Codex marketplace name must be nyldn-plugins");
-assert(codexMarketplace.plugins?.[0]?.name === codexManifest.name, "Codex marketplace plugin name must match plugin manifest");
-assert(codexMarketplace.plugins?.[0]?.source?.path === "./", "Codex marketplace plugin source path must be ./");
+assert(codexMarketplace.interface?.displayName === "nyldn", "Codex marketplace display name must be nyldn");
+const codexImgEntry = codexMarketplace.plugins?.find((plugin) => plugin.name === codexManifest.name);
+const codexOctopusEntry = codexMarketplace.plugins?.find((plugin) => plugin.name === "claude-octopus");
+assert(codexMarketplace.plugins?.[0]?.name === "claude-octopus", "Codex marketplace must keep claude-octopus first");
+assert(codexImgEntry, "Codex marketplace must include img");
+assert(codexImgEntry.source?.source === "local", "Codex marketplace img source must be local");
+assert(codexImgEntry.source?.path === "./", "Codex marketplace img source path must be ./");
+assert(codexOctopusEntry, "Codex marketplace must include claude-octopus");
+assert(codexOctopusEntry.source?.source === "url", "Codex marketplace claude-octopus source must be a URL source");
+assert(
+  codexOctopusEntry.source?.url === "https://github.com/nyldn/claude-octopus.git",
+  "Codex marketplace claude-octopus source must point at nyldn/claude-octopus",
+);
 
 const requiredFiles = [
   "bin/img",
   "src/img.mjs",
   ".claude-plugin/marketplace.json",
   ".agents/plugins/marketplace.json",
-  "commands/img.md",
   "commands/openai.md",
   "commands/gemini.md",
   "commands/edit.md",
@@ -74,7 +84,7 @@ for (const file of requiredFiles) {
   assert(existsSync(join(root, file)), `Missing required file: ${file}`);
 }
 
-for (const command of ["commands/img.md", "commands/openai.md", "commands/gemini.md", "commands/edit.md", "commands/setup.md"]) {
+for (const command of ["commands/openai.md", "commands/gemini.md", "commands/edit.md", "commands/setup.md"]) {
   const content = readFileSync(join(root, command), "utf8");
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   assert(match, `${command} is missing YAML frontmatter`);
@@ -84,7 +94,7 @@ for (const command of ["commands/img.md", "commands/openai.md", "commands/gemini
 const skill = readFileSync(join(root, "skills/img/SKILL.md"), "utf8");
 assert(skill.includes("gpt-image-2"), "Skill must mention gpt-image-2");
 assert(skill.includes("gemini-3.1-flash-image-preview"), "Skill must mention Gemini model");
-assert(skill.includes("version: 0.1.0"), "Skill must include version frontmatter");
+assert(skill.includes(`version: ${packageJson.version}`), "Skill must include version frontmatter");
 
 function typeMatches(value, expected) {
   if (Array.isArray(expected)) return expected.some((item) => typeMatches(value, item));

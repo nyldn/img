@@ -46,6 +46,10 @@
         "references": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "colors": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
         }
       },
       "additionalProperties": false
@@ -61,6 +65,7 @@
           },
           "provider": { "enum": ["openai", "gemini"] },
           "aspect": { "type": "string" },
+          "count": { "type": "integer", "minimum": 1, "maximum": 12 },
           "size": { "type": "string" },
           "style": { "type": "string" },
           "outputDir": { "type": "string" },

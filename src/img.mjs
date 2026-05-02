@@ -1,7 +1,8 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 export const OPENAI_DEFAULT_MODEL = "gpt-image-2";
@@ -10,6 +11,13 @@ export const DEFAULT_CONFIG_FILENAME = "img.config.json";
 export const MAX_IMAGES_PER_RUN = 12;
 
 const PROVIDERS = new Set(["openai", "gemini"]);
+const PROVIDER_KEY_NAMES = {
+  openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
+};
+const KEYCHAIN_SERVICE = "nyldn-img";
+const MARKETPLACE_URL = "https://github.com/nyldn/plugins.git";
+const PLUGIN_REF = "img@nyldn-plugins";
 const OPENAI_FORMATS = new Set(["png", "jpeg", "webp"]);
 const OPENAI_QUALITIES = new Set(["auto", "low", "medium", "high"]);
 const GEMINI_ASPECTS = new Set([
@@ -43,6 +51,19 @@ export class ProviderApiError extends Error {
     this.details = details;
     this.hint = hint;
     this.bodyExcerpt = bodyExcerpt;
+  }
+}
+
+export class SetupRequiredError extends Error {
+  constructor({ provider, keyName, envFile, envFileCreated, userConfigFile, userConfigFileCreated }) {
+    super(`${keyName} is required for --provider ${provider}`);
+    this.name = "SetupRequiredError";
+    this.provider = provider;
+    this.keyName = keyName;
+    this.envFile = envFile;
+    this.envFileCreated = envFileCreated;
+    this.userConfigFile = userConfigFile;
+    this.userConfigFileCreated = userConfigFileCreated;
   }
 }
 
@@ -106,6 +127,13 @@ export function parseArgs(argv = []) {
     _explicit: new Set(),
     setup: false,
     setupScope: "",
+    json: false,
+    install: false,
+    installTarget: "all",
+    installSetup: "auto",
+    key: false,
+    keyAction: "status",
+    keyProvider: "",
     checkHealth: false,
     activate: false,
     configFile: "",
@@ -149,8 +177,48 @@ export function parseArgs(argv = []) {
         args.activate = true;
         break;
       case "setup":
-      case "--setup":
         args.setup = true;
+        break;
+      case "install":
+        if (i === 0) {
+          args.install = true;
+          if (argv[i + 1] && ["all", "claude", "codex"].includes(argv[i + 1].toLowerCase())) {
+            args.installTarget = argv[i + 1].toLowerCase();
+            i += 1;
+          }
+        } else {
+          positional.push(token);
+        }
+        break;
+      case "--setup":
+        if (args.install) {
+          args.installSetup = "force";
+        } else {
+          args.setup = true;
+        }
+        break;
+      case "--no-setup":
+        args.installSetup = "never";
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      case "key":
+      case "keys":
+      case "keychain":
+        if (i === 0 || token === "keychain") {
+          args.key = true;
+          if (argv[i + 1] && !argv[i + 1].startsWith("--")) {
+            args.keyAction = argv[i + 1].toLowerCase();
+            i += 1;
+          }
+          if (argv[i + 1] && !argv[i + 1].startsWith("--")) {
+            args.keyProvider = argv[i + 1].toLowerCase();
+            i += 1;
+          }
+        } else {
+          positional.push(token);
+        }
         break;
       case "check-health":
       case "doctor":
@@ -409,6 +477,13 @@ function normalizePromptList(value) {
   return [];
 }
 
+function normalizeBrandColors(colors = {}) {
+  if (!colors || typeof colors !== "object" || Array.isArray(colors)) return [];
+  return Object.entries(colors)
+    .map(([name, value]) => [String(name).trim(), String(value).trim()])
+    .filter(([name, value]) => name && value);
+}
+
 export function composePrompt(userPrompt, promptConfig = {}) {
   const prePrompts = [
     ...normalizePromptList(promptConfig.prePrompt),
@@ -418,12 +493,16 @@ export function composePrompt(userPrompt, promptConfig = {}) {
     ...normalizePromptList(promptConfig.negativePrompt),
     ...normalizePromptList(promptConfig.negativePrompts),
   ];
-  if (prePrompts.length === 0 && negativePrompts.length === 0) {
+  const brandColors = normalizeBrandColors(promptConfig.brandColors);
+  if (prePrompts.length === 0 && negativePrompts.length === 0 && brandColors.length === 0) {
     return userPrompt;
   }
   const parts = [];
   if (prePrompts.length > 0) {
     parts.push(`Always apply these instructions:\n${prePrompts.join("\n")}`);
+  }
+  if (brandColors.length > 0) {
+    parts.push(`Brand colors:\n${brandColors.map(([name, value]) => `${name}: ${value}`).join("\n")}`);
   }
   parts.push(`User prompt:\n${userPrompt}`);
   if (negativePrompts.length > 0) {
@@ -454,6 +533,7 @@ export function applyConfigDefaults(args, config = {}) {
   maybeApply(args, "outputDir", config.outputDir);
   maybeApply(args, "outputDir", assetConfig.outputDir);
   maybeApply(args, "count", config.count);
+  maybeApply(args, "count", assetConfig.count);
   maybeApply(args, "open", config.openAfterGeneration);
   args.limits = config.limits || {};
 
@@ -484,6 +564,7 @@ export function applyConfigDefaults(args, config = {}) {
       ...normalizePromptList(config.prompt?.negativePrompt),
       ...normalizePromptList(config.brand?.negativePrompts),
     ]),
+    brandColors: config.brand?.colors || {},
   };
   args.apiPrompt = composePrompt(args.prompt, args.promptConfig);
   return args;
@@ -533,6 +614,300 @@ export function loadEnv(args, root = pluginRoot()) {
   return loaded;
 }
 
+function keychainEnabled(env = process.env) {
+  return process.platform === "darwin" && env.IMG_DISABLE_KEYCHAIN !== "1";
+}
+
+function keyNameForProvider(provider) {
+  const normalized = String(provider || "").toLowerCase();
+  if (!PROVIDERS.has(normalized)) {
+    throw new Error(`Unsupported provider "${provider}". Use openai or gemini.`);
+  }
+  return PROVIDER_KEY_NAMES[normalized];
+}
+
+function providerForKeyName(keyName) {
+  return Object.entries(PROVIDER_KEY_NAMES).find(([, value]) => value === keyName)?.[0] || "";
+}
+
+function readMacKeychainSecret(keyName) {
+  if (!keychainEnabled()) return "";
+  try {
+    return execFileSync("security", [
+      "find-generic-password",
+      "-a",
+      keyName,
+      "-s",
+      KEYCHAIN_SERVICE,
+      "-w",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function writeMacKeychainSecret(keyName) {
+  if (!keychainEnabled()) {
+    throw new Error("macOS Keychain storage is only available on macOS and when IMG_DISABLE_KEYCHAIN is not set.");
+  }
+  execFileSync("security", [
+    "add-generic-password",
+    "-U",
+    "-a",
+    keyName,
+    "-s",
+    KEYCHAIN_SERVICE,
+    "-l",
+    `img ${keyName}`,
+    "-w",
+  ], { stdio: "inherit" });
+}
+
+function deleteMacKeychainSecret(keyName) {
+  if (!keychainEnabled()) {
+    throw new Error("macOS Keychain storage is only available on macOS and when IMG_DISABLE_KEYCHAIN is not set.");
+  }
+  try {
+    execFileSync("security", [
+      "delete-generic-password",
+      "-a",
+      keyName,
+      "-s",
+      KEYCHAIN_SERVICE,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+  } catch {
+    throw new Error(`${keyName} was not found in macOS Keychain service ${KEYCHAIN_SERVICE}.`);
+  }
+}
+
+function keyStatusFor(keyName) {
+  const env = envStatus(process.env[keyName]);
+  const keychainSecret = readMacKeychainSecret(keyName);
+  const keychain = keychainSecret ? "present" : keychainEnabled() ? "missing" : "unavailable";
+  const effective = env === "present" || keychain === "present" ? "present" : env === "placeholder" ? "placeholder" : "missing";
+  const source = env === "present" ? "environment" : keychain === "present" ? "macos-keychain" : null;
+  return {
+    provider: providerForKeyName(keyName),
+    keyName,
+    effective,
+    source,
+    environment: env,
+    macosKeychain: keychain,
+  };
+}
+
+function keyStatusMap(loadedCredentialKeys = []) {
+  const loadedSources = new Map(loadedCredentialKeys.map((item) => [item.keyName, item.source]));
+  return Object.fromEntries(
+    Object.values(PROVIDER_KEY_NAMES).map((keyName) => {
+      const status = keyStatusFor(keyName);
+      if (loadedSources.has(keyName) && status.effective === "present") {
+        status.source = loadedSources.get(keyName);
+        status.loadedFromCredentialStore = true;
+      }
+      return [providerForKeyName(keyName), status];
+    }),
+  );
+}
+
+function loadStoredProviderKeys() {
+  const loaded = [];
+  for (const keyName of Object.values(PROVIDER_KEY_NAMES)) {
+    if (envStatus(process.env[keyName]) === "present") continue;
+    const secret = readMacKeychainSecret(keyName);
+    if (!secret) continue;
+    process.env[keyName] = secret;
+    loaded.push({
+      provider: providerForKeyName(keyName),
+      keyName,
+      source: "macos-keychain",
+    });
+  }
+  return loaded;
+}
+
+function keyCommand(args, loadedEnvFiles = []) {
+  const action = args.keyAction || "status";
+  if (!["status", "list", "set", "delete", "remove"].includes(action)) {
+    throw new Error("Unsupported key action. Use: img key status, img key set openai, or img key delete openai.");
+  }
+
+  if (action === "status" || action === "list") {
+    return {
+      key: true,
+      action: "status",
+      store: "macos-keychain",
+      service: KEYCHAIN_SERVICE,
+      supported: keychainEnabled(),
+      loadedEnvFiles,
+      keys: keyStatusMap(),
+      nextSteps: keychainEnabled()
+        ? [
+            "Run img key set openai from a normal terminal to save the default provider key in macOS Keychain.",
+            "Run img key set gemini only if you want Gemini image generation too.",
+          ]
+        : [
+            "Set OPENAI_API_KEY or GEMINI_API_KEY in the shell, an env file, or a platform secret manager.",
+          ],
+    };
+  }
+
+  if (!args.keyProvider) throw new Error(`img key ${action} requires a provider: openai or gemini.`);
+  const provider = args.keyProvider;
+  const keyName = keyNameForProvider(provider);
+
+  if (action === "set") {
+    writeMacKeychainSecret(keyName);
+    process.env[keyName] = readMacKeychainSecret(keyName);
+    return {
+      key: true,
+      action: "set",
+      provider,
+      keyName,
+      store: "macos-keychain",
+      service: KEYCHAIN_SERVICE,
+      status: "stored",
+      nextSteps: ["Re-run the same /img or img request."],
+    };
+  }
+
+  deleteMacKeychainSecret(keyName);
+  delete process.env[keyName];
+  return {
+    key: true,
+    action: "delete",
+    provider,
+    keyName,
+    store: "macos-keychain",
+    service: KEYCHAIN_SERVICE,
+    status: "deleted",
+  };
+}
+
+function commandExists(command) {
+  try {
+    execFileSync("sh", ["-lc", `command -v ${command}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setupNeeded() {
+  if (!existsSync(userConfigPath())) return true;
+  let defaultProvider = "openai";
+  try {
+    const loaded = loadConfig(parseArgs([]));
+    defaultProvider = String(loaded.config.defaultProvider || loaded.config.provider || defaultProvider).toLowerCase();
+  } catch {
+    defaultProvider = "openai";
+  }
+  return envPresence()[defaultProvider] !== "present";
+}
+
+export function buildInstallPlan({ target = "all", hasClaude = false, hasCodex = false, configured = false, setupMode = "auto" } = {}) {
+  const includeClaude = target === "all" || target === "claude";
+  const includeCodex = target === "all" || target === "codex";
+  const setupAction = setupMode === "never"
+    ? "skip"
+    : setupMode === "force" || !configured
+      ? "run"
+      : "skip";
+
+  return {
+    install: true,
+    marketplace: MARKETPLACE_URL,
+    plugin: PLUGIN_REF,
+    target,
+    targets: {
+      claude: {
+        selected: includeClaude,
+        available: includeClaude && hasClaude,
+        actions: includeClaude && hasClaude
+          ? [
+              `claude plugin marketplace add ${MARKETPLACE_URL} --scope user`,
+              `claude plugin install ${PLUGIN_REF} --scope user`,
+              "install Claude /img base command",
+            ]
+          : [],
+        skippedReason: includeClaude && !hasClaude ? "claude command not found" : null,
+      },
+      codex: {
+        selected: includeCodex,
+        available: includeCodex && hasCodex,
+        actions: includeCodex && hasCodex
+          ? [
+              `codex plugin marketplace add ${MARKETPLACE_URL}`,
+              "open Codex /plugins and enable img if non-interactive install is unavailable",
+            ]
+          : [],
+        skippedReason: includeCodex && !hasCodex ? "codex command not found" : null,
+      },
+    },
+    setup: {
+      action: setupAction,
+      reason: setupAction === "run"
+        ? (configured ? "setup was requested" : "first install or missing default configuration")
+        : "setup skipped by flag or existing configuration",
+      command: "img setup",
+    },
+  };
+}
+
+function runInstallStep(command, args) {
+  execFileSync(command, args, { stdio: "inherit" });
+}
+
+async function installCommand(args, loadedEnvFiles, loadedCredentialKeys) {
+  const plan = buildInstallPlan({
+    target: args.installTarget,
+    hasClaude: commandExists("claude"),
+    hasCodex: commandExists("codex"),
+    configured: !setupNeeded(),
+    setupMode: args.installSetup,
+  });
+
+  if (args.dryRun || args.json) return plan;
+
+  const results = [];
+  if (plan.targets.claude.available) {
+    runInstallStep("claude", ["plugin", "marketplace", "add", MARKETPLACE_URL, "--scope", "user"]);
+    runInstallStep("claude", ["plugin", "install", PLUGIN_REF, "--scope", "user"]);
+    const aliasInstaller = resolve(pluginRoot(), "scripts", "install-img-alias.sh");
+    if (existsSync(aliasInstaller)) runInstallStep(aliasInstaller, []);
+    results.push({ target: "claude", installed: true });
+  }
+
+  if (plan.targets.codex.available) {
+    runInstallStep("codex", ["plugin", "marketplace", "add", MARKETPLACE_URL]);
+    results.push({
+      target: "codex",
+      installed: true,
+      nextStep: "Open /plugins in Codex and enable img if it is not already enabled.",
+    });
+  }
+
+  if (plan.setup.action === "run") {
+    if (isInteractiveTerminal(args)) {
+      await setupTui(args, loadedEnvFiles, loadedCredentialKeys);
+    } else {
+      results.push({ target: "setup", installed: false, nextStep: "Run img setup in a normal terminal." });
+    }
+  }
+
+  return {
+    installed: true,
+    plan,
+    results,
+  };
+}
+
 function mimeTypeFor(filePath, fallback = "image/png") {
   const ext = extname(filePath).toLowerCase();
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
@@ -567,6 +942,8 @@ function timestamp() {
 export function validateArgs(args, requireKeys = true) {
   if (args.help) return;
   if (args.setup) return;
+  if (args.install) return;
+  if (args.key) return;
   if (args.checkHealth) return;
   if (!PROVIDERS.has(args.provider)) {
     throw new Error(`Unsupported provider "${args.provider}". Use openai or gemini.`);
@@ -596,14 +973,33 @@ export function validateArgs(args, requireKeys = true) {
     if (args.compression !== undefined && (!Number.isInteger(args.compression) || args.compression < 0 || args.compression > 100)) {
       throw new Error("--compression must be an integer from 0 to 100");
     }
-    if (requireKeys && !process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is required for --provider openai");
+    if (requireKeys && envStatus(process.env.OPENAI_API_KEY) !== "present") throw new Error("OPENAI_API_KEY is required for --provider openai");
   }
   if (args.provider === "gemini") {
     if (!GEMINI_ASPECTS.has(args.aspect)) throw new Error(`Unsupported Gemini aspect ratio: ${args.aspect}`);
     if (!GEMINI_IMAGE_SIZES.has(args.imageSize)) throw new Error(`Unsupported Gemini image size: ${args.imageSize}. Use 1K, 2K, or 4K.`);
     if (args.mask) throw new Error("--mask is only supported with --provider openai");
-    if (requireKeys && !process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is required for --provider gemini");
+    if (requireKeys && envStatus(process.env.GEMINI_API_KEY) !== "present") throw new Error("GEMINI_API_KEY is required for --provider gemini");
   }
+}
+
+function ensureProviderKeyOrBootstrap(args) {
+  const providerKey = keyNameForProvider(args.provider);
+  if (envStatus(process.env[providerKey]) === "present") return;
+
+  const envPath = args.envFile ? resolve(args.cwd, args.envFile) : userEnvPath();
+  const configPath = userConfigPath();
+  const envFileCreated = writeSetupEnvFile(envPath);
+  const userConfigFileCreated = writeSetupConfigFile(configPath, 0o600);
+
+  throw new SetupRequiredError({
+    provider: args.provider,
+    keyName: providerKey,
+    envFile: envPath,
+    envFileCreated,
+    userConfigFile: configPath,
+    userConfigFileCreated,
+  });
 }
 
 function envStatus(value) {
@@ -688,8 +1084,8 @@ function isWritableOrCreatable(dirPath) {
 
 function envPresence() {
   return {
-    openai: envStatus(process.env.OPENAI_API_KEY),
-    gemini: envStatus(process.env.GEMINI_API_KEY),
+    openai: keyStatusFor(PROVIDER_KEY_NAMES.openai).effective,
+    gemini: keyStatusFor(PROVIDER_KEY_NAMES.gemini).effective,
   };
 }
 
@@ -698,7 +1094,7 @@ function setupScopeFor(args) {
   return findProjectRoot(args.cwd) ? "both" : "user";
 }
 
-function setupCommand(args, loadedEnvFiles) {
+function setupCommand(args, loadedEnvFiles, loadedCredentialKeys = []) {
   const scope = setupScopeFor(args);
   const projectRoot = findProjectRoot(args.cwd) || resolve(args.cwd);
   const envPath = args.envFile ? resolve(args.cwd, args.envFile) : userEnvPath();
@@ -711,6 +1107,7 @@ function setupCommand(args, loadedEnvFiles) {
   const defaultProvider = loadedConfig.config.defaultProvider || process.env.IMG_PROVIDER || "openai";
   return {
     setup: true,
+    interactive: false,
     scope,
     projectRoot,
     envFile: scope === "project" ? null : envPath,
@@ -724,13 +1121,204 @@ function setupCommand(args, loadedEnvFiles) {
     defaultProvider,
     keys: envPresence(),
     loadedEnvFiles,
+    loadedCredentialKeys,
     nextSteps: [
-      "Add OPENAI_API_KEY to the user env file for the default /img path.",
-      "Add GEMINI_API_KEY only if you want Gemini image generation too.",
+      "Run img key set openai from a normal terminal to save the default provider key in macOS Keychain.",
+      "Run img key set gemini only if you want Gemini image generation too.",
+      "Use the user env file only for machines where Keychain is not available.",
       "Edit user config for personal defaults and project img.config.json for team defaults.",
       "Run: img generate a photorealistic 2:1 image of a dog",
     ],
   };
+}
+
+function isInteractiveTerminal(args) {
+  return !args.json && process.stdin.isTTY === true && process.stdout.isTTY === true;
+}
+
+function writeJsonFile(filePath, value, mode = 0o644) {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { mode });
+}
+
+function readConfigOrDefault(configPath) {
+  return existsSync(configPath) ? safeReadJson(configPath) : defaultConfigTemplate();
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function askValue(rl, label, current = "") {
+  const suffix = current ? ` [${current}]` : "";
+  const answer = await rl.question(`${label}${suffix}: `);
+  return answer.trim() || current;
+}
+
+async function askChoice(rl, label, choices, current = "") {
+  const rendered = choices.map((choice, index) => `${index + 1}) ${choice}`).join("  ");
+  const answer = await rl.question(`${label}${current ? ` [${current}]` : ""}\n${rendered}\n> `);
+  const trimmed = answer.trim();
+  if (!trimmed) return current || choices[0];
+  const index = Number.parseInt(trimmed, 10) - 1;
+  if (choices[index]) return choices[index];
+  return choices.includes(trimmed) ? trimmed : current || choices[0];
+}
+
+async function pause(rl) {
+  await rl.question("\nPress Enter to continue.");
+}
+
+function renderSetupHeader(title) {
+  process.stdout.write("\x1b[2J\x1b[H");
+  console.log("img setup control panel");
+  console.log("=".repeat(48));
+  console.log(title);
+  console.log("-".repeat(48));
+}
+
+function renderSetupStatus(status) {
+  console.log(`Scope: ${status.scope}`);
+  console.log(`Project: ${status.projectRoot}`);
+  console.log(`User config: ${status.userConfigFile || "not used"}`);
+  console.log(`Project config: ${status.projectConfigFile || "not used"}`);
+  console.log(`Keys: OpenAI ${status.keys.openai}; Gemini ${status.keys.gemini}`);
+  console.log(`Default provider: ${status.defaultProvider}`);
+}
+
+async function credentialsPanel(rl) {
+  renderSetupHeader("Credentials");
+  console.log("1) Save OpenAI key in macOS Keychain");
+  console.log("2) Save Gemini key in macOS Keychain");
+  console.log("3) Delete OpenAI key from macOS Keychain");
+  console.log("4) Delete Gemini key from macOS Keychain");
+  console.log("b) Back");
+  const choice = (await rl.question("> ")).trim().toLowerCase();
+  if (choice === "1") writeMacKeychainSecret(PROVIDER_KEY_NAMES.openai);
+  if (choice === "2") writeMacKeychainSecret(PROVIDER_KEY_NAMES.gemini);
+  if (choice === "3") deleteMacKeychainSecret(PROVIDER_KEY_NAMES.openai);
+  if (choice === "4") deleteMacKeychainSecret(PROVIDER_KEY_NAMES.gemini);
+}
+
+async function personalDefaultsPanel(rl) {
+  const configPath = userConfigPath();
+  const config = readConfigOrDefault(configPath);
+  renderSetupHeader("Personal Defaults");
+  config.defaultProvider = await askChoice(rl, "Default provider", ["openai", "gemini"], config.defaultProvider || "openai");
+  config.outputDir = await askValue(rl, "Default output directory", config.outputDir || "./img-output");
+  config.count = Number.parseInt(await askValue(rl, "Default images per run", String(config.count || 1)), 10);
+  config.openAfterGeneration = (await askChoice(rl, "Open first image after generation", ["false", "true"], String(config.openAfterGeneration === true))) === "true";
+  config.openai = config.openai || {};
+  config.openai.quality = await askChoice(rl, "OpenAI quality", ["auto", "low", "medium", "high"], config.openai.quality || "auto");
+  config.openai.format = await askChoice(rl, "OpenAI format", ["png", "jpeg", "webp"], config.openai.format || "png");
+  config.gemini = config.gemini || {};
+  config.gemini.aspect = await askValue(rl, "Gemini default aspect", config.gemini.aspect || "1:1");
+  config.gemini.imageSize = await askChoice(rl, "Gemini image size", ["1K", "2K", "4K"], config.gemini.imageSize || "1K");
+  writeJsonFile(configPath, config, 0o600);
+}
+
+async function projectBrandPanel(rl, args) {
+  const projectRoot = findProjectRoot(args.cwd) || resolve(args.cwd);
+  const configPath = resolve(projectRoot, args.configFile || DEFAULT_CONFIG_FILENAME);
+  const config = readConfigOrDefault(configPath);
+  config.project = config.project || {};
+  config.brand = config.brand || {};
+  renderSetupHeader("Project Brand Defaults");
+  config.project.name = await askValue(rl, "Project name", config.project.name || "");
+  config.project.framework = await askValue(rl, "Framework", config.project.framework || "");
+  config.project.siteRoot = await askValue(rl, "Site root", config.project.siteRoot || ".");
+
+  const prePrompt = await askValue(rl, "Add brand pre-prompt (blank to skip)", "");
+  if (prePrompt) config.brand.prePrompts = uniqueStrings([...normalizePromptList(config.brand.prePrompts), prePrompt]);
+  const negativePrompt = await askValue(rl, "Add negative prompt (blank to skip)", "");
+  if (negativePrompt) config.brand.negativePrompts = uniqueStrings([...normalizePromptList(config.brand.negativePrompts), negativePrompt]);
+  const refs = splitList(await askValue(rl, "Brand/reference image paths, comma-separated", normalizePromptList(config.brand.references).join(", ")));
+  if (refs.length > 0) config.brand.references = uniqueStrings(refs);
+
+  config.brand.colors = config.brand.colors || {};
+  while (true) {
+    const name = await askValue(rl, "Brand color name (blank when done)", "");
+    if (!name) break;
+    config.brand.colors[name] = await askValue(rl, `Value for ${name}`, config.brand.colors[name] || "#000000");
+  }
+
+  writeJsonFile(configPath, config);
+}
+
+async function assetPresetPanel(rl, args) {
+  const projectRoot = findProjectRoot(args.cwd) || resolve(args.cwd);
+  const configPath = resolve(projectRoot, args.configFile || DEFAULT_CONFIG_FILENAME);
+  const config = readConfigOrDefault(configPath);
+  config.assetTypes = config.assetTypes || {};
+  renderSetupHeader("Asset Types And Batch Presets");
+  const currentIds = Object.keys(config.assetTypes);
+  if (currentIds.length > 0) console.log(`Existing: ${currentIds.join(", ")}`);
+  const id = await askValue(rl, "Asset type id", currentIds[0] || "hero");
+  const preset = config.assetTypes[id] || {};
+  preset.aliases = splitList(await askValue(rl, "Aliases, comma-separated", normalizePromptList(preset.aliases).join(", ")));
+  preset.provider = await askChoice(rl, "Provider", ["openai", "gemini"], preset.provider || config.defaultProvider || "openai");
+  preset.aspect = await askValue(rl, "Aspect ratio", preset.aspect || "16:9");
+  preset.count = Number.parseInt(await askValue(rl, "Default batch count", String(preset.count || 1)), 10);
+  preset.style = await askValue(rl, "Style pre-prompt for this asset", preset.style || "");
+  preset.outputDir = await askValue(rl, "Output directory", preset.outputDir || `public/generated/${id}`);
+  preset.filenamePattern = await askValue(rl, "Filename pattern", preset.filenamePattern || `${id}-{slug}-{index}`);
+  preset.destination = await askValue(rl, "Destination id", preset.destination || "project-assets");
+  config.assetTypes[id] = preset;
+  writeJsonFile(configPath, config);
+}
+
+async function previewPanel(rl, args) {
+  renderSetupHeader("Prompt Preview");
+  const samplePrompt = await askValue(rl, "Sample prompt", "A website hero image");
+  const assetType = await askValue(rl, "Asset type (blank for none)", "");
+  const dryRunArgs = ["--dry-run", "--cwd", args.cwd, "--prompt", samplePrompt];
+  if (assetType) dryRunArgs.push("--asset-type", assetType);
+  const result = await run(dryRunArgs);
+  console.log("\nComposed API prompt:");
+  console.log("-".repeat(48));
+  console.log(result.apiPrompt);
+  console.log("-".repeat(48));
+  console.log(`Provider: ${result.provider}`);
+  console.log(`Count: ${result.count}`);
+  console.log(`Output: ${result.outputDir}`);
+  await pause(rl);
+}
+
+async function setupTui(args, loadedEnvFiles, loadedCredentialKeys = []) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
+    while (true) {
+      const status = setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
+      renderSetupHeader("Status");
+      renderSetupStatus(status);
+      console.log("\n1) Credentials");
+      console.log("2) Personal defaults");
+      console.log("3) Project brand defaults");
+      console.log("4) Asset types and batch presets");
+      console.log("5) Preview composed prompt");
+      console.log("6) Health check");
+      console.log("q) Save and exit");
+      const choice = (await rl.question("> ")).trim().toLowerCase();
+      if (choice === "q" || choice === "") break;
+      if (choice === "1") await credentialsPanel(rl);
+      if (choice === "2") await personalDefaultsPanel(rl);
+      if (choice === "3") await projectBrandPanel(rl, args);
+      if (choice === "4") await assetPresetPanel(rl, args);
+      if (choice === "5") await previewPanel(rl, args);
+      if (choice === "6") {
+        renderSetupHeader("Health Check");
+        console.log(JSON.stringify(healthCommand(args, loadedEnvFiles, loadConfig(args), loadedCredentialKeys), null, 2));
+        await pause(rl);
+      }
+    }
+    return setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
+  } finally {
+    rl.close();
+  }
 }
 
 function configWarnings(config, type) {
@@ -811,7 +1399,7 @@ function insidePath(root, candidate) {
   return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
 }
 
-function healthCommand(args, loadedEnvFiles, loadedConfig) {
+function healthCommand(args, loadedEnvFiles, loadedConfig, loadedCredentialKeys = []) {
   const projectRoot = findProjectRoot(args.cwd);
   const projectConfigLayer = loadedConfig.layers?.find((layer) => layer.type === "project");
   const checks = [];
@@ -828,18 +1416,21 @@ function healthCommand(args, loadedEnvFiles, loadedConfig) {
   const userEnv = userEnvPath();
   add(
     "user-env",
-    existsSync(userEnv) ? "ok" : "warning",
-    existsSync(userEnv) ? "User env file exists." : "User env file is missing; run img setup --user.",
+    existsSync(userEnv) ? "ok" : "info",
+    existsSync(userEnv) ? "User env file exists." : "User env file is missing; this is okay if keys are in macOS Keychain.",
     { path: userEnv },
   );
 
   const keys = envPresence();
+  const keyDetails = keyStatusMap(loadedCredentialKeys);
   const defaultProvider = String(loadedConfig.config.defaultProvider || loadedConfig.config.provider || "openai").toLowerCase();
   add(
     "default-provider-key",
     keys[defaultProvider] === "present" ? "ok" : "warning",
-    keys[defaultProvider] === "present" ? `${defaultProvider} API key is present.` : `${defaultProvider} API key is ${keys[defaultProvider]}.`,
-    { provider: defaultProvider },
+    keys[defaultProvider] === "present"
+      ? `${defaultProvider} API key is present via ${keyDetails[defaultProvider].source}.`
+      : `${defaultProvider} API key is ${keys[defaultProvider]}.`,
+    { provider: defaultProvider, source: keyDetails[defaultProvider].source },
   );
 
   if (projectRoot) {
@@ -916,7 +1507,9 @@ function healthCommand(args, loadedEnvFiles, loadedConfig) {
     projectRoot,
     configFiles: loadedConfig.layers?.map((layer) => ({ type: layer.type, path: layer.path })) || [],
     loadedEnvFiles,
+    loadedCredentialKeys,
     keys,
+    keyDetails,
     checks,
   };
 }
@@ -1050,6 +1643,24 @@ export async function apiErrorFromResponse(response, provider, args = {}) {
 }
 
 export function formatErrorForCli(error) {
+  if (error instanceof SetupRequiredError) {
+    return {
+      error: error.message,
+      setupRequired: true,
+      provider: error.provider,
+      keyName: error.keyName,
+      envFile: error.envFile,
+      envFileCreated: error.envFileCreated,
+      userConfigFile: error.userConfigFile,
+      userConfigFileCreated: error.userConfigFileCreated,
+      nextSteps: [
+        `Run img key set ${error.provider} from a normal terminal to save ${error.keyName} in macOS Keychain.`,
+        `Or add ${error.keyName}=... to ${error.envFile}.`,
+        "Re-run the same /img request.",
+        "Run /img setup only if you want to refresh setup files or add project defaults.",
+      ],
+    };
+  }
   if (error instanceof ProviderApiError) {
     const output = {
       error: error.message,
@@ -1217,7 +1828,12 @@ export function helpText() {
 
 Usage:
   img activate
+  img install [claude|codex|all] [--setup|--no-setup]
   img setup [--user|--project|--both]
+  img key status
+  img key set openai
+  img key set gemini
+  img key delete openai
   img check-health
   img generate a photorealistic 2:1 image of a dog
   img --provider openai --prompt "A clean app icon"
@@ -1242,19 +1858,12 @@ Options:
   --count N                      Number of images to generate, 1-${MAX_IMAGES_PER_RUN}.
   --open                         Open the first saved image with the OS viewer.
   --dry-run                      Validate and print request metadata without API calls.
+  --json                         Return non-interactive JSON for setup/install.
 `;
 }
 
 export function activationText() {
-  return `
- _                 🖼️
-(_)_ __ ___   __ _
-| | '_ \` _ \\ / _\` |
-| | | | | | | (_| |
-|_|_| |_| |_|\\__, |
-             |___/
-
-img image workflow loader
+  return `🖼️ img image workflow loader
 context -> plan -> generate -> deliver
 `;
 }
@@ -1264,11 +1873,18 @@ export async function run(rawArgs = []) {
   if (args.activate) return { text: activationText() };
   if (args.help) return { text: helpText() };
   const loadedEnvFiles = loadEnv(args);
-  if (args.setup) return setupCommand(args, loadedEnvFiles);
+  if (args.key) return keyCommand(args, loadedEnvFiles);
+  const loadedCredentialKeys = args.dryRun ? [] : loadStoredProviderKeys();
+  if (args.install) return installCommand(args, loadedEnvFiles, loadedCredentialKeys);
+  if (args.setup) {
+    if (isInteractiveTerminal(args)) return setupTui(args, loadedEnvFiles, loadedCredentialKeys);
+    return setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
+  }
   const loadedConfig = loadConfig(args);
-  if (args.checkHealth) return healthCommand(args, loadedEnvFiles, loadedConfig);
+  if (args.checkHealth) return healthCommand(args, loadedEnvFiles, loadedConfig, loadedCredentialKeys);
   applyConfigDefaults(args, loadedConfig.config);
-  validateArgs(args, !args.dryRun);
+  validateArgs(args, false);
+  if (!args.dryRun) ensureProviderKeyOrBootstrap(args);
 
   const endpoint = args.provider === "openai"
     ? (args.inputs.length > 0 ? "https://api.openai.com/v1/images/edits" : "https://api.openai.com/v1/images/generations")
@@ -1283,6 +1899,7 @@ export async function run(rawArgs = []) {
       prompt: args.prompt,
       apiPrompt: args.apiPrompt,
       assetType: args.assetType || null,
+      count: args.count,
       inputs: args.inputs,
       outputDir: resolve(args.cwd, args.outputDir),
       loadedEnvFiles,
