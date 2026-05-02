@@ -16,11 +16,7 @@
     "prePrompts": [],
     "negativePrompts": [],
     "references": [],
-    "colors": {
-      "primary": "",
-      "secondary": "",
-      "accent": ""
-    }
+    "colors": {}
   },
   "assetTypes": {
     "hero": {

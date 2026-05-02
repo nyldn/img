@@ -485,6 +485,29 @@ function normalizeBrandColors(colors = {}) {
     .filter(([name, value]) => name && value);
 }
 
+export function parseBrandColorInput(value = "") {
+  const colors = {};
+  const tokens = String(value || "")
+    .split(/[\s,]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  for (const token of tokens) {
+    let hex = token.replace(/^#/, "");
+    if (/^[0-9a-f]{3}$/i.test(hex)) {
+      hex = hex.split("").map((char) => `${char}${char}`).join("");
+    }
+    if (!/^[0-9a-f]{6}$/i.test(hex)) continue;
+    colors[`color${Object.keys(colors).length + 1}`] = `#${hex.toLowerCase()}`;
+  }
+
+  return colors;
+}
+
+function brandColorInputValue(colors = {}) {
+  return normalizeBrandColors(colors).map(([, value]) => value).join(" ");
+}
+
 export function composePrompt(userPrompt, promptConfig = {}) {
   const prePrompts = [
     ...normalizePromptList(promptConfig.prePrompt),
@@ -1311,12 +1334,13 @@ async function projectBrandPanel(rl, args) {
   const refs = splitList(await askValue(rl, "Brand/reference image paths, comma-separated", normalizePromptList(config.brand.references).join(", ")));
   if (refs.length > 0) config.brand.references = uniqueStrings(refs);
 
-  config.brand.colors = config.brand.colors || {};
-  while (true) {
-    const name = await askValue(rl, "Brand color name (blank when done)", "");
-    if (!name) break;
-    config.brand.colors[name] = await askValue(rl, `Value for ${name}`, config.brand.colors[name] || "#000000");
-  }
+  const colorAnswer = await askValue(
+    rl,
+    "Brand colors, space or comma-separated hex codes (# optional)",
+    brandColorInputValue(config.brand.colors),
+  );
+  const colors = parseBrandColorInput(colorAnswer);
+  if (Object.keys(colors).length > 0 || !colorAnswer.trim()) config.brand.colors = colors;
 
   writeJsonFile(configPath, config);
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.12 - 2026-05-02
+
+- Replaced per-color project setup prompts with one paste-friendly brand color
+  field that accepts space- or comma-separated hex values.
+
 ## 0.1.11 - 2026-05-02
 
 - Removed unused project name and framework prompts from the setup control

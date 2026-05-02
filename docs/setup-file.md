@@ -106,11 +106,7 @@ macOS, `img` reads the matching Keychain item before calling the provider API.
     "prePrompts": [],
     "negativePrompts": [],
     "references": [],
-    "colors": {
-      "primary": "",
-      "secondary": "",
-      "accent": ""
-    }
+    "colors": {}
   },
   "assetTypes": {
     "hero": {

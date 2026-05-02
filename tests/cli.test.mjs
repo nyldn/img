@@ -20,6 +20,7 @@ import {
   keyPromptLabel,
   loadConfig,
   loadEnv,
+  parseBrandColorInput,
   parseArgs,
   resolveAssetType,
   run,
@@ -439,6 +440,25 @@ test("project setup does not ask for unused project identity metadata", () => {
   assert.equal(schema.properties.project.properties.name, undefined);
   assert.equal(schema.properties.project.properties.framework, undefined);
   assert.equal(schema.properties.project.additionalProperties, true);
+});
+
+test("project setup accepts pasted brand color hex lists", () => {
+  const source = readFileSync("src/img.mjs", "utf8");
+  const template = JSON.parse(readFileSync("templates/img.config.json", "utf8"));
+
+  assert.deepEqual(parseBrandColorInput("#123456 00aaee, ffc400"), {
+    color1: "#123456",
+    color2: "#00aaee",
+    color3: "#ffc400",
+  });
+  assert.deepEqual(parseBrandColorInput("abc, #def"), {
+    color1: "#aabbcc",
+    color2: "#ddeeff",
+  });
+  assert.deepEqual(parseBrandColorInput(""), {});
+  assert.doesNotMatch(source, /Brand color name \(blank when done\)|Value for \$\{name\}/);
+  assert.match(source, /Brand colors, space or comma-separated hex codes \(# optional\)/);
+  assert.deepEqual(template.brand.colors, {});
 });
 
 test("validateArgs rejects unsupported Gemini image sizes before calling the API", () => {

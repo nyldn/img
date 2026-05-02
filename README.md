@@ -301,8 +301,8 @@ Inside a git repo with `img.config.json` configured:
        ],
        "negativePrompts": ["No watermarks.", "No stock-photo cliches."],
        "colors": {
-         "primary": "#123456",
-         "accent": "#ffcc00"
+         "color1": "#123456",
+         "color2": "#ffcc00"
        }
      }
    }
