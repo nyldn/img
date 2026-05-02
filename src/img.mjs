@@ -1172,21 +1172,54 @@ async function pause(rl) {
   await rl.question("\nPress Enter to continue.");
 }
 
-function renderSetupHeader(title) {
-  process.stdout.write("\x1b[2J\x1b[H");
-  console.log("img setup control panel");
-  console.log("=".repeat(48));
-  console.log(title);
-  console.log("-".repeat(48));
+const SETUP_WORDMARK = [
+  " _ _ __ ___   __ _",
+  "| | '_ ` _ \\ / _` |",
+  "|_|_| |_| |_|\\__, |",
+  "             |___/",
+].join("\n");
+
+function setupMood(status) {
+  const missing = [status.keys?.openai, status.keys?.gemini].some((value) => value !== "present");
+  if (missing) return "Status check: secure, but not yet useful.";
+  return "Status check: keys tucked away; pixels may proceed.";
 }
 
-function renderSetupStatus(status) {
-  console.log(`Scope: ${status.scope}`);
-  console.log(`Project: ${status.projectRoot}`);
-  console.log(`User config: ${status.userConfigFile || "not used"}`);
-  console.log(`Project config: ${status.projectConfigFile || "not used"}`);
-  console.log(`Keys: OpenAI ${status.keys.openai}; Gemini ${status.keys.gemini}`);
-  console.log(`Default provider: ${status.defaultProvider}`);
+export function formatSetupPanel(status) {
+  return [
+    SETUP_WORDMARK,
+    "setup control panel - pixels with paperwork",
+    "=".repeat(60),
+    setupMood(status),
+    "",
+    `Scope: ${status.scope}`,
+    `Project: ${status.projectRoot}`,
+    `User config: ${status.userConfigFile || "not used"}`,
+    `Project config: ${status.projectConfigFile || "not used"}`,
+    `Keys: OpenAI ${status.keys.openai}; Gemini ${status.keys.gemini}`,
+    `Default provider: ${status.defaultProvider}`,
+    "",
+    "1) Credentials                 keys, minus the copy-paste circus",
+    "2) Personal defaults           fewer flags, fewer tiny regrets",
+    "3) Project brand defaults      colors, voice, and house rules",
+    "4) Asset types and batches     repeatable image chores",
+    "5) Preview composed prompt     inspect before spending tokens",
+    "6) Health check                find the loose screw",
+    "q) Save and exit               leave before this becomes a dashboard",
+  ].join("\n");
+}
+
+function formatSetupHeader(title) {
+  return [
+    SETUP_WORDMARK,
+    `setup / ${title}`,
+    "=".repeat(60),
+  ].join("\n");
+}
+
+function renderSetupHeader(title) {
+  process.stdout.write("\x1b[2J\x1b[H");
+  console.log(formatSetupHeader(title));
 }
 
 async function credentialsPanel(rl) {
@@ -1293,15 +1326,8 @@ async function setupTui(args, loadedEnvFiles, loadedCredentialKeys = []) {
     setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
     while (true) {
       const status = setupCommand(args, loadedEnvFiles, loadedCredentialKeys);
-      renderSetupHeader("Status");
-      renderSetupStatus(status);
-      console.log("\n1) Credentials");
-      console.log("2) Personal defaults");
-      console.log("3) Project brand defaults");
-      console.log("4) Asset types and batch presets");
-      console.log("5) Preview composed prompt");
-      console.log("6) Health check");
-      console.log("q) Save and exit");
+      process.stdout.write("\x1b[2J\x1b[H");
+      console.log(formatSetupPanel(status));
       const choice = (await rl.question("> ")).trim().toLowerCase();
       if (choice === "q" || choice === "") break;
       if (choice === "1") await credentialsPanel(rl);

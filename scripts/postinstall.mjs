@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const imgBin = resolve(root, "bin", "img");
-const command = [process.execPath, imgBin, "setup", "--user"];
+const command = [process.execPath, imgBin, "setup", "--user", "--json"];
 
 function postinstallDecision(env = process.env) {
   if (env.IMG_SKIP_POSTINSTALL === "1" || env.IMG_SKIP_POSTINSTALL === "true") {
@@ -41,32 +41,29 @@ if (!decision.run) {
 }
 
 const ttyPath = process.env.IMG_POSTINSTALL_TTY || (process.platform === "win32" ? "CON" : "/dev/tty");
+const result = spawnSync(command[0], command.slice(1), {
+  cwd: process.env.INIT_CWD || homedir(),
+  env: { ...process.env, IMG_NPM_POSTINSTALL: "1" },
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"],
+});
+
 let ttyFd;
 try {
-  ttyFd = openSync(ttyPath, "r+");
-} catch {
-  process.exit(0);
-}
-
-try {
+  ttyFd = openSync(ttyPath, "w");
   writeLine(ttyFd);
   writeLine(ttyFd, "img first-run setup");
-  writeLine(ttyFd, "Running img setup --user. Press Ctrl+C to cancel setup.");
-  writeLine(ttyFd);
-
-  const result = spawnSync(command[0], command.slice(1), {
-    cwd: process.env.INIT_CWD || homedir(),
-    env: { ...process.env, IMG_NPM_POSTINSTALL: "1" },
-    stdio: [ttyFd, ttyFd, ttyFd],
-  });
-
   if (result.error || result.status !== 0) {
-    writeLine(ttyFd);
-    writeLine(ttyFd, "img setup did not finish during npm install.");
-    writeLine(ttyFd, "Run this from a normal terminal when ready:");
+    writeLine(ttyFd, "Setup files were not refreshed during npm install.");
+    writeLine(ttyFd, "Run this from your normal terminal when ready:");
     writeLine(ttyFd, "  img setup");
-    writeLine(ttyFd);
+  } else {
+    writeLine(ttyFd, "User setup files are ready. The interactive panel is deliberately not run inside npm.");
+    writeLine(ttyFd, "Next:");
+    writeLine(ttyFd, "  img setup    # open the control panel");
+    writeLine(ttyFd, "  img install  # register Claude/Codex plugins");
   }
+  writeLine(ttyFd);
 } finally {
-  closeSync(ttyFd);
+  if (ttyFd !== undefined) closeSync(ttyFd);
 }

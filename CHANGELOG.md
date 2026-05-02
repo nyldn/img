@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-05-02
+
+- Gave the interactive setup control panel a compact ASCII wordmark, clearer
+  status copy, and more human menu labels.
+- Made npm postinstall bootstrap user setup files non-interactively so the
+  control panel only runs from a normal terminal.
+
 ## 0.1.5 - 2026-05-02
 
 - Changed npm postinstall to run only user setup, avoiding Claude/Codex CLI

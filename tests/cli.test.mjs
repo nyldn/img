@@ -15,6 +15,7 @@ import {
   buildOpenAIJsonBody,
   composePrompt,
   formatErrorForCli,
+  formatSetupPanel,
   findProjectRoot,
   loadConfig,
   loadEnv,
@@ -401,6 +402,26 @@ test("setup --json returns non-interactive setup payload", async () => {
     assert.equal(result.keys.openai, "missing");
     assert.equal(result.nextSteps.some((step) => step.includes("img key set openai")), true);
   });
+});
+
+test("setup panel has a compact branded control-room intro", () => {
+  const panel = formatSetupPanel({
+    scope: "user",
+    projectRoot: "/Users/chris",
+    userConfigFile: "/Users/chris/.config/img/config.json",
+    projectConfigFile: null,
+    keys: {
+      openai: "missing",
+      gemini: "missing",
+    },
+    defaultProvider: "openai",
+  });
+
+  assert.match(panel, /_ _ __ ___/);
+  assert.match(panel, /pixels with paperwork/);
+  assert.match(panel, /Status check: secure, but not yet useful/);
+  assert.match(panel, /1\) Credentials\s+keys, minus the copy-paste circus/);
+  assert.match(panel, /q\) Save and exit\s+leave before this becomes a dashboard/);
 });
 
 test("validateArgs rejects unsupported Gemini image sizes before calling the API", () => {

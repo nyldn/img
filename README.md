@@ -36,21 +36,24 @@ plugins when those CLIs are present.
 ### 1. Recommended: npm CLI + agent plugins
 
 ```bash
-npm install -g @nyldn.sh/img
+npm install -g @nyldn.sh/img && img setup && img install
 ```
 
-On an interactive global install, npm starts first-run `img setup --user` from
-the controlling terminal. That opens setup for credentials and personal defaults
-without asking Claude Code or Codex to handle API keys.
+Npm bootstraps first-run user setup files non-interactively. The chained
+`img setup` opens the interactive control panel from a normal terminal, and
+`img install` registers the native agent plugins.
 
-After npm finishes, register the native agent plugins:
+The setup and install steps are separate from npm's lifecycle because npm
+postinstall TTYs are unreliable across terminals. If you prefer to run the steps
+one at a time:
 
 ```bash
+npm install -g @nyldn.sh/img
+img setup
 img install
 ```
 
-If npm cannot access a terminal, or if you skipped lifecycle scripts, run
-`img setup` manually too.
+If you skipped lifecycle scripts, `img setup` creates the same user files.
 
 If you need to install directly from source instead of npm registry:
 
