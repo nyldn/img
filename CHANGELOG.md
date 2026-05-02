@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 - 2026-05-02
+
+- Added a global npm postinstall hook that opens first-run `img install --user`
+  through the controlling terminal when npm is run interactively.
+
 ## 0.1.3 - 2026-05-02
 
 - Published the npm package as `@nyldn.sh/img` and made that the primary install path in the public docs.

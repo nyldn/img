@@ -37,6 +37,15 @@ plugins when those CLIs are present.
 
 ```bash
 npm install -g @nyldn.sh/img
+```
+
+On an interactive global install, npm starts first-run `img install --user` from
+the controlling terminal. That registers Claude Code and Codex when those CLIs
+are present and opens setup when user config or provider keys are missing.
+
+If npm cannot access a terminal, or if you skipped lifecycle scripts, run:
+
+```bash
 img install
 ```
 
