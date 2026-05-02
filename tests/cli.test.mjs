@@ -417,7 +417,8 @@ test("setup panel has a compact branded control-room intro", () => {
     defaultProvider: "openai",
   });
 
-  assert.match(panel, /_ _ __ ___/);
+  assert.match(panel, /___ __  __   _   ___ ___/);
+  assert.match(panel, /🖼️  A G E N C Y/);
   assert.match(panel, /pixels with paperwork/);
   assert.match(panel, /Status check: secure, but not yet useful/);
   assert.match(panel, /1\) Credentials\s+keys, minus the copy-paste circus/);

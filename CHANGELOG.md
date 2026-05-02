@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7 - 2026-05-02
+
+- Updated the setup control panel wordmark to the selected Image Agency ASCII
+  treatment with the image emoji on the AGENCY line.
+
 ## 0.1.6 - 2026-05-02
 
 - Gave the interactive setup control panel a compact ASCII wordmark, clearer
