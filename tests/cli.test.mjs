@@ -17,6 +17,7 @@ import {
   formatErrorForCli,
   formatSetupPanel,
   findProjectRoot,
+  keyPromptLabel,
   loadConfig,
   loadEnv,
   parseArgs,
@@ -547,6 +548,12 @@ test("key status reports effective key source without exposing values", async ()
     assert.equal(result.keys.gemini.effective, "missing");
     assert.equal(JSON.stringify(result).includes("sk-test-secret"), false);
   });
+});
+
+test("key entry prompts use API key language, not password language", () => {
+  assert.equal(keyPromptLabel("OPENAI_API_KEY"), "OpenAI API key");
+  assert.equal(keyPromptLabel("GEMINI_API_KEY"), "Gemini API key");
+  assert.equal(/password/i.test(keyPromptLabel("OPENAI_API_KEY")), false);
 });
 
 test("setup creates user files outside a git repo without requiring API keys", async () => {

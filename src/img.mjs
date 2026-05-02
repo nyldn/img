@@ -3,6 +3,7 @@ import { accessSync, constants, existsSync, mkdirSync, readFileSync, statSync, w
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 export const OPENAI_DEFAULT_MODEL = "gpt-image-2";
@@ -630,6 +631,13 @@ function providerForKeyName(keyName) {
   return Object.entries(PROVIDER_KEY_NAMES).find(([, value]) => value === keyName)?.[0] || "";
 }
 
+export function keyPromptLabel(keyName) {
+  const provider = providerForKeyName(keyName);
+  if (provider === "openai") return "OpenAI API key";
+  if (provider === "gemini") return "Gemini API key";
+  return `${keyName} API key`;
+}
+
 function readMacKeychainSecret(keyName) {
   if (!keychainEnabled()) return "";
   try {
@@ -649,10 +657,42 @@ function readMacKeychainSecret(keyName) {
   }
 }
 
-function writeMacKeychainSecret(keyName) {
+async function readHiddenValue(prompt) {
+  if (!process.stdin.isTTY) {
+    throw new Error("Run this from a normal terminal so img can read the API key securely.");
+  }
+
+  let muted = false;
+  const output = new Writable({
+    write(chunk, encoding, callback) {
+      if (!muted) process.stderr.write(chunk, encoding);
+      callback();
+    },
+  });
+  const rl = createInterface({
+    input: process.stdin,
+    output,
+    terminal: true,
+  });
+
+  try {
+    output.write(prompt);
+    muted = true;
+    const value = await rl.question("");
+    muted = false;
+    process.stderr.write("\n");
+    return value.trim();
+  } finally {
+    rl.close();
+  }
+}
+
+async function writeMacKeychainSecret(keyName) {
   if (!keychainEnabled()) {
     throw new Error("macOS Keychain storage is only available on macOS and when IMG_DISABLE_KEYCHAIN is not set.");
   }
+  const value = await readHiddenValue(`${keyPromptLabel(keyName)}: `);
+  if (!value) throw new Error(`${keyPromptLabel(keyName)} was empty; no Keychain entry was saved.`);
   execFileSync("security", [
     "add-generic-password",
     "-U",
@@ -661,9 +701,10 @@ function writeMacKeychainSecret(keyName) {
     "-s",
     KEYCHAIN_SERVICE,
     "-l",
-    `img ${keyName}`,
+    `Image Agency ${keyPromptLabel(keyName)}`,
     "-w",
-  ], { stdio: "inherit" });
+    value,
+  ], { stdio: ["ignore", "ignore", "pipe"] });
 }
 
 function deleteMacKeychainSecret(keyName) {
@@ -729,7 +770,7 @@ function loadStoredProviderKeys() {
   return loaded;
 }
 
-function keyCommand(args, loadedEnvFiles = []) {
+async function keyCommand(args, loadedEnvFiles = []) {
   const action = args.keyAction || "status";
   if (!["status", "list", "set", "delete", "remove"].includes(action)) {
     throw new Error("Unsupported key action. Use: img key status, img key set openai, or img key delete openai.");
@@ -760,7 +801,7 @@ function keyCommand(args, loadedEnvFiles = []) {
   const keyName = keyNameForProvider(provider);
 
   if (action === "set") {
-    writeMacKeychainSecret(keyName);
+    await writeMacKeychainSecret(keyName);
     process.env[keyName] = readMacKeychainSecret(keyName);
     return {
       key: true,
@@ -1231,8 +1272,8 @@ async function credentialsPanel(rl) {
   console.log("4) Delete Gemini key from macOS Keychain");
   console.log("b) Back");
   const choice = (await rl.question("> ")).trim().toLowerCase();
-  if (choice === "1") writeMacKeychainSecret(PROVIDER_KEY_NAMES.openai);
-  if (choice === "2") writeMacKeychainSecret(PROVIDER_KEY_NAMES.gemini);
+  if (choice === "1") await writeMacKeychainSecret(PROVIDER_KEY_NAMES.openai);
+  if (choice === "2") await writeMacKeychainSecret(PROVIDER_KEY_NAMES.gemini);
   if (choice === "3") deleteMacKeychainSecret(PROVIDER_KEY_NAMES.openai);
   if (choice === "4") deleteMacKeychainSecret(PROVIDER_KEY_NAMES.gemini);
 }

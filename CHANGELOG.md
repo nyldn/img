@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9 - 2026-05-02
+
+- Changed provider credential entry to prompt for an API key directly instead
+  of exposing macOS Keychain's generic password wording.
+
 ## 0.1.8 - 2026-05-02
 
 - Documented `npx -y @nyldn.sh/install-img` as the recommended first-time
