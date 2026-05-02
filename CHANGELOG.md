@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 - 2026-05-02
+
+- Documented `npx -y @nyldn.sh/install-img` as the recommended first-time
+  installer, with the manual npm/setup/install path kept as a transparent
+  fallback.
+
 ## 0.1.7 - 2026-05-02
 
 - Updated the setup control panel wordmark to the selected Image Agency ASCII

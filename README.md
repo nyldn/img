@@ -36,22 +36,23 @@ plugins when those CLIs are present.
 ### 1. Recommended: npm CLI + agent plugins
 
 ```bash
-npm install -g @nyldn.sh/img && img setup && img install
+npx -y @nyldn.sh/install-img
 ```
 
-Npm bootstraps first-run user setup files non-interactively. The chained
-`img setup` opens the interactive control panel from a normal terminal, and
-`img install` registers the native agent plugins.
+The installer installs the `img` CLI, opens the interactive setup control panel,
+then registers native Claude Code and Codex plugins.
 
-The setup and install steps are separate from npm's lifecycle because npm
-postinstall TTYs are unreliable across terminals. If you prefer to run the steps
-one at a time:
+If you prefer to run the transparent npm steps yourself:
 
 ```bash
 npm install -g @nyldn.sh/img
 img setup
 img install
 ```
+
+The `img` package still bootstraps first-run user setup files non-interactively
+during npm install, but it does not open the control panel inside npm because npm
+postinstall TTYs are unreliable across terminals.
 
 If you skipped lifecycle scripts, `img setup` creates the same user files.
 
